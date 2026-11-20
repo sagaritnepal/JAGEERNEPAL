@@ -8,7 +8,7 @@ import { supabase } from '../../supabase';
 import { JobTimeline } from '../JobTimeline';
 import { TicketChip } from '../TicketChip';
 import { ticketLabel } from '../../utils/ticket';
-import { jobJourney, jobStages, type JobTimes } from '../../utils/jobTimeline';
+import { jobJourney, type JobTimes } from '../../utils/jobTimeline';
 import { useAuthStore } from '../../hooks/useAuth';
 import { subscribeToTable, useSupabaseQuery, useSupabaseUpdate } from '../../hooks/useSupabase';
 import { useMyEmployees } from '../../hooks/useTechnicianEmployment';
@@ -30,7 +30,6 @@ import { DateField } from '../DateTimeFields';
 import {
   EditableAmount,
   FULL_TABLE_WIDTH,
-  JobProgressBars,
   JobTableHeader,
   JobTableScroll,
   ROW_BUTTON_HEIGHT,
@@ -148,6 +147,18 @@ function statusChip(request: ServiceRequest): { label: string; color: string; bg
   if (request.open_to_team) return { label: 'Waiting to be picked up', color: '#047857', bg: '#ECFDF5' };
   return { label: 'Not started', color: '#6B7280', bg: '#F3F4F6' };
 }
+
+/** The icon next to each statusChip() label, so the Progress column reads as a small colored card
+ * instead of plain colored text. */
+const STATUS_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
+  'Not started': 'ellipse-outline',
+  'Waiting to be picked up': 'megaphone-outline',
+  'Waiting for them to accept': 'hourglass-outline',
+  'Working on it': 'build',
+  Completed: 'checkmark-circle',
+  'Done & paid': 'checkmark-done-circle',
+  Cancelled: 'close-circle',
+};
 
 /** "CCTV & Surveillance - Repair" reads as a category over a job name; a name without the dash is all title. */
 function splitIssue(issue: string): { eyebrow: string | null; title: string } {
@@ -1093,8 +1104,6 @@ function JobCompactRow({
   const has = (key: ColKey) => columnsOf(tier, true).includes(key);
   const w = TIER_WIDTH[tier];
   const cell = { minWidth: 0 } as const;
-  const stages = jobStages(r, times);
-  const statusLine = [chip.label, hold?.label, overdue ? `Overdue by ${overdueBy(r)}` : null, pay.label].filter(Boolean).join(' · ');
   const techText = r.technician_id ? technicianName(r.technician_id) : r.open_to_team ? 'Open to the team' : 'Nobody yet';
   // When the work began and how long it has been going (a job under way), or when it was offered and
   // how long it has been waiting for an answer. `now` ticks each minute, so the figure keeps counting.
@@ -1224,9 +1233,26 @@ function JobCompactRow({
         </View>
       )}
 
-      {/* Assigned / WIP / Hold / Completed, and under them how the job stands. */}
-      <View style={{ width: w.status, flexShrink: 0 }}>
-        <JobProgressBars steps={stages} note={statusLine} details={timeLines} />
+      {/* How the job stands, as one colored icon card - overdue (if any) right under it, not a job
+          that's unpaid: every job is unpaid until it's billed, so that word said nothing new. */}
+      <View style={{ width: w.status, flexShrink: 0, gap: 3 }}>
+        <View
+          className="self-start flex-row items-center rounded-full pl-1.5 pr-2"
+          style={{ height: 20, gap: 4, backgroundColor: chip.bg }}
+        >
+          <Ionicons name={STATUS_ICON[chip.label] ?? 'ellipse'} size={11} color={chip.color} />
+          <Text className="text-[10.5px] font-bold" style={{ color: chip.color }} numberOfLines={1}>
+            {chip.label}
+          </Text>
+        </View>
+        {overdue && <OverdueChip />}
+        {hold && <Chip label={hold.label} color={hold.color} bg={hold.bg} />}
+        {pay.label !== 'Unpaid' && <Chip label={pay.label} color={pay.color} bg={pay.bg} />}
+        {timeLines.map((line) => (
+          <Text key={line} className="text-[10.5px] text-gray-500" numberOfLines={1}>
+            {line}
+          </Text>
+        ))}
       </View>
 
       <View style={{ width: widthOf(tier, 'assign', true), flexShrink: 0 }}>
