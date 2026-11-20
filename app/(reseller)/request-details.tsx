@@ -176,15 +176,39 @@ function ResellerRequestDetails() {
     }
   }
 
-  // A saved customer is selected directly; a phone contact not saved yet
-  // just fills the fields (not created yet) - handleSubmit below already
-  // saves a brand new customer from whatever's in these fields at booking
-  // time, so there's no need to create one early here.
-  function handleSelectNew(name: string, phone: string | null) {
+  // The confirm popup's "Add customer" already told the reseller this person is saved, so it has
+  // to actually be saved now - same as every other picker in the app (see DayBookScreen.tsx). An
+  // address typed there only fills this job's own Location if that's still empty; it doesn't
+  // overwrite a location already picked.
+  async function handleSelectNew(answer: { name: string; phone: string | null; partyTypeId: string | null; address: string | null }) {
     setShowNameSuggestions(false);
-    setCustomerId(null);
-    setCustomerName(name);
-    if (phone) setCustomerPhone(phone);
+    setCustomerName(answer.name);
+    if (answer.phone) setCustomerPhone(answer.phone);
+    if (answer.address && !address.trim() && !coords) setAddress(answer.address);
+    if (!userId) {
+      setCustomerId(null);
+      return;
+    }
+    const existing = answer.phone ? (myCustomers ?? []).find((c) => c.phone === answer.phone) : undefined;
+    if (existing) {
+      setCustomerId(existing.id);
+      return;
+    }
+    try {
+      const created = await createCustomer.mutateAsync({
+        owner_id: userId,
+        name: answer.name,
+        phone: answer.phone,
+        address: answer.address,
+        ...(answer.partyTypeId ? { party_type_id: answer.partyTypeId } : {}),
+      });
+      setCustomerId(created.id);
+    } catch (err) {
+      // Not saved after all (most likely a duplicate-phone conflict) - the amber "New customer"
+      // banner still offers Register Now, and submitting the request saves it either way.
+      setCustomerId(null);
+      showAlert('Could not save this customer yet', getErrorMessage(err));
+    }
   }
 
   async function handlePickPhoto(index: number) {
@@ -675,7 +699,8 @@ function ResellerRequestDetails() {
           handleSelectCustomer(c);
           setShowNameSuggestions(false);
         }}
-        onSelectNew={handleSelectNew}
+        askAddress
+        onSelectNewWithAddress={handleSelectNew}
         onClose={() => setShowNameSuggestions(false)}
       />
 

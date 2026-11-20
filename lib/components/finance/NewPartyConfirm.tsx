@@ -10,12 +10,13 @@ import { readKey } from '../../utils/webKeys';
 
 export type NewPartyKind = 'customer' | 'vendor' | 'payee';
 
-/** What the popup answers with: the name to save, the Ledger type to file the person under (null: none) and,
- * when the popup asked for one, the phone number (null: none). */
+/** What the popup answers with: the name to save, the Ledger type to file the person under (null: none),
+ * and, when the popup asked for one, the phone number and address (null: none / not asked). */
 export interface NewPartyAnswer {
   name: string;
   partyTypeId: string | null;
   phone: string | null;
+  address: string | null;
 }
 
 export interface AskNewPartyOptions {
@@ -26,6 +27,10 @@ export interface AskNewPartyOptions {
   askPhone?: boolean;
   /** The phone the box starts with. */
   phone?: string | null;
+  /** Show an Address box (optional for the person to fill). */
+  askAddress?: boolean;
+  /** The address the box starts with. */
+  address?: string | null;
 }
 
 /** The type to save on the new customer row: `{ ...withType(answer) }`. */
@@ -37,6 +42,8 @@ function NewPartyDialog({
   typeId,
   askPhone,
   initialPhone,
+  askAddress,
+  initialAddress,
   onAdd,
   onCancel,
 }: {
@@ -45,6 +52,8 @@ function NewPartyDialog({
   typeId?: string | null;
   askPhone?: boolean;
   initialPhone: string | null;
+  askAddress?: boolean;
+  initialAddress: string | null;
   onAdd: (answer: NewPartyAnswer) => void;
   onCancel: () => void;
 }) {
@@ -52,6 +61,7 @@ function NewPartyDialog({
   const { types, remove: removeType } = usePartyTypes(userId);
   const [name, setName] = useState(initial);
   const [phone, setPhone] = useState(initialPhone ?? '');
+  const [address, setAddress] = useState(initialAddress ?? '');
   // A Ledger type made in this popup is kept only if the person is added: on Cancel it is taken back out.
   const madeTypes = useRef<string[]>([]);
   const cancel = () => {
@@ -69,7 +79,7 @@ function NewPartyDialog({
   const [picked, setPicked] = useState<string | null | undefined>(undefined);
   const partyTypeId = picked === undefined ? fitting : picked;
   const add = () => {
-    if (name.trim()) onAdd({ name: name.trim(), partyTypeId, phone: phone.trim() || null });
+    if (name.trim()) onAdd({ name: name.trim(), partyTypeId, phone: phone.trim() || null, address: address.trim() || null });
   };
   return (
     // No cross, but a click outside, Esc and Cancel all go back: the name is dropped and nothing is saved. Only Add saves.
@@ -123,6 +133,27 @@ function NewPartyDialog({
           </Field>
         )}
       </FieldRow>
+      {askAddress && (
+        <Field label="Address (optional)">
+          <TextInput
+            value={address}
+            onChangeText={setAddress}
+            placeholder="House/street, city, area"
+            placeholderTextColor="#9CA3AF"
+            onKeyPress={(e) => {
+              const k = readKey(e);
+              if (k.key === 'Enter') {
+                k.prevent();
+                add();
+              } else if (k.key === 'Escape') {
+                k.prevent();
+                cancel();
+              }
+            }}
+            className={INPUT}
+          />
+        </Field>
+      )}
       <PartyTypeField ownerId={userId} value={partyTypeId} onChange={setPicked} onCreated={(id) => madeTypes.current.push(id)} />
       <FormActions onCancel={cancel} onSave={add} saveLabel={`Add ${kind}`} />
     </PopupCard>
@@ -163,6 +194,8 @@ export function useConfirmNewParty(): {
       typeId={pending.typeId}
       askPhone={pending.askPhone}
       initialPhone={pending.phone ?? null}
+      askAddress={pending.askAddress}
+      initialAddress={pending.address ?? null}
       onAdd={(answer) => finish(answer)}
       onCancel={() => finish(null)}
     />

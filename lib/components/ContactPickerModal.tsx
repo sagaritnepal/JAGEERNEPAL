@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { View, TextInput, Pressable, FlatList, Modal, KeyboardAvoidingView, Platform } from 'react-native';
 import { Text, useCaps } from './finance/CapsText';
 import { highlightText } from './finance/Highlight';
-import { useConfirmNewParty, type NewPartyKind } from './finance/NewPartyConfirm';
+import { useConfirmNewParty, type NewPartyKind, type NewPartyAnswer } from './finance/NewPartyConfirm';
 import { Ionicons } from '@expo/vector-icons';
 import { buildCustomerSuggestions, type CustomerSuggestion } from '../utils/customerSuggestions';
 import { useAuthStore } from '../hooks/useAuth';
@@ -28,14 +28,17 @@ export function ContactPickerModal({
   placeholder = 'Search saved customers or phone contacts',
   matchPhone,
   partyKind = 'customer',
+  askAddress,
+  onSelectNewWithAddress,
 }: {
   visible: boolean;
   initialQuery: string;
   customers: Customer[];
   phoneContacts: PhoneContactEntry[];
   onSelectCustomer: (customer: Customer) => void;
-  /** A person who is not saved yet, after the confirmation popup (name, phone, Ledger type) was answered with Add. */
-  onSelectNew: (name: string, phone: string | null, partyTypeId: string | null) => void;
+  /** A person who is not saved yet, after the confirmation popup (name, phone, Ledger type) was answered with Add.
+   * Ignored when `onSelectNewWithAddress` is given instead (see `askAddress`). */
+  onSelectNew?: (name: string, phone: string | null, partyTypeId: string | null) => void;
   onClose: () => void;
   title?: string;
   placeholder?: string;
@@ -43,6 +46,12 @@ export function ContactPickerModal({
   matchPhone?: boolean;
   /** What the confirmation popup calls the person being added. */
   partyKind?: NewPartyKind;
+  /** Also show an Address box in the confirmation popup. */
+  askAddress?: boolean;
+  /** Takes over from `onSelectNew` when `askAddress` is set, with the full answer (including
+   * address) in one object - keeps address out of onSelectNew's fixed 3-argument shape, which every
+   * other screen using this picker already calls positionally. */
+  onSelectNewWithAddress?: (answer: NewPartyAnswer) => void;
 }) {
   // The Ledger type each person is filed under, shown under their name.
   const userId = useAuthStore((state) => state.session?.user.id);
@@ -69,9 +78,12 @@ export function ContactPickerModal({
   async function startAdd(name: string, phone: string | null) {
     // Two popups open at once fight over the keyboard focus, so this window goes first.
     const save = onSelectNew;
+    const saveWithAddress = onSelectNewWithAddress;
     onClose();
-    const asked = await askNewParty({ name, kind: partyKind, askPhone: true, phone });
-    if (asked) save(asked.name, asked.phone, asked.partyTypeId);
+    const asked = await askNewParty({ name, kind: partyKind, askPhone: true, phone, askAddress });
+    if (!asked) return;
+    if (saveWithAddress) saveWithAddress(asked);
+    else save?.(asked.name, asked.phone, asked.partyTypeId);
   }
 
   return (
