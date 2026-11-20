@@ -182,6 +182,8 @@ type JobRowData = {
   chalan?: { no: string | null; photos: number; onOpen: () => void };
   /** A tick box on the row, to bill several completed jobs of one customer together. */
   select?: { checked: boolean; onToggle: () => void };
+  /** This row's position in the list, 1-based - the SN no. column. */
+  sn?: number;
   /** The job's token number, shown in its own column. */
   token?: string | null;
   /** Assigned / WIP / Hold / Completed - or, for finished work, Completed / Billed / Paid - drawn as
@@ -420,6 +422,11 @@ function JobRowView({ data, stage, wide }: { data: JobRowData; stage: Stage; wid
         )}
         {/* Completed has room for a tick box at the start of every row; a billed or paid one has none. */}
         {stage === 'completed' && !data.select && <View style={{ width: 20 }} />}
+        {has('sn') && (
+          <Text className="text-[12px] text-gray-500" style={{ width: w.sn, flexShrink: 0 }} numberOfLines={1}>
+            {data.sn ?? ''}
+          </Text>
+        )}
         <Text className="text-[12px] font-bold text-gray-800" style={{ width: w.token, flexShrink: 0 }} numberOfLines={1}>
           {data.token ?? '—'}
         </Text>
@@ -586,6 +593,7 @@ function RequestJobRow({
   stage,
   billing,
   wide,
+  sn,
   onEditChalan,
   selected,
   onToggleSelect,
@@ -595,6 +603,8 @@ function RequestJobRow({
   /** A finished job: how far its money has got - not billed yet, billed, or paid. */
   billing?: Billing;
   wide: boolean;
+  /** This row's position in the list, 1-based - the SN no. column. */
+  sn?: number;
   /** Finished jobs: open the chalan - to see it, or to type the number in when there is none. */
   onEditChalan?: (item: ServiceRequest) => void;
   /** Completed jobs: whether this one is ticked for a combined bill. */
@@ -709,6 +719,7 @@ function RequestJobRow({
       stage={stage}
       wide={wide}
       data={{
+        sn,
         icon: <CategoryBadge category={item.issue_type} size={wide ? 30 : 44} />,
         title: item.issue_type,
         who: customerName,
@@ -763,11 +774,14 @@ function OrderJobRow({
   order,
   stage,
   wide,
+  sn,
   productMap,
 }: {
   order: Order;
   stage: Stage;
   wide: boolean;
+  /** This row's position in the list, 1-based - the SN no. column. */
+  sn?: number;
   productMap: Map<string, Product>;
 }) {
   const { data: buyer } = useSupabaseRow('profiles', order.buyer_id);
@@ -798,6 +812,7 @@ function OrderJobRow({
       stage={stage}
       wide={wide}
       data={{
+        sn,
         icon: (
           <View
             className="items-center justify-center bg-emerald-500"
@@ -824,7 +839,18 @@ function OrderJobRow({
 /** A sale bill added straight to a customer (not through a job). It starts under Completed with
  * no bill number; once the number is added it is Billed, and Paid when the customer's ledger is
  * settled - all of it still under Completed. */
-function SaleBillRow({ sale, billing, wide }: { sale: BusinessTransaction; billing: Billing; wide: boolean }) {
+function SaleBillRow({
+  sale,
+  billing,
+  wide,
+  sn,
+}: {
+  sale: BusinessTransaction;
+  billing: Billing;
+  wide: boolean;
+  /** This row's position in the list, 1-based - the SN no. column. */
+  sn?: number;
+}) {
   const hasBillNo = !!sale.bill_no?.trim();
   const editPath = `/(reseller)/transactions?type=sale&add=1&edit=${sale.id}`;
   const open = () => router.push(editPath as any);
@@ -843,6 +869,7 @@ function SaleBillRow({ sale, billing, wide }: { sale: BusinessTransaction; billi
       stage="completed"
       wide={wide}
       data={{
+        sn,
         icon: (
           <View
             className="items-center justify-center bg-emerald-500"
@@ -1071,23 +1098,28 @@ export default function ResellerRequestQueue() {
     router.push(`/(reseller)/transactions?type=sale&add=1&fromJobs=${jobs.map((j) => j.id).join(',')}` as any);
   }
 
-  const jobRow = (item: JobItem) =>
-    item.kind === 'request' ? (
+  // `index` is this row's position in whichever list called it - the SN no. column. Left out when a
+  // list doesn't track one (e.g. a filtered sub-list), so the column just reads blank for those rows.
+  const jobRow = (item: JobItem, index?: number) => {
+    const sn = index != null ? index + 1 : undefined;
+    return item.kind === 'request' ? (
       <RequestJobRow
         key={`r-${item.id}`}
         item={item.request}
         stage={activeStage}
         billing={item.billing}
         wide={tableMode}
+        sn={sn}
         onEditChalan={openChalan}
         selected={pickedJobs.has(item.id)}
         onToggleSelect={togglePicked}
       />
     ) : item.kind === 'sale' ? (
-      <SaleBillRow key={`s-${item.id}`} sale={item.sale} billing={item.billing} wide={tableMode} />
+      <SaleBillRow key={`s-${item.id}`} sale={item.sale} billing={item.billing} wide={tableMode} sn={sn} />
     ) : (
-      <OrderJobRow key={`o-${item.id}`} order={item.order} stage={activeStage} wide={tableMode} productMap={productMap} />
+      <OrderJobRow key={`o-${item.id}`} order={item.order} stage={activeStage} wide={tableMode} sn={sn} productMap={productMap} />
     );
+  };
 
   const emptyText = isLoading ? 'Loading…' : 'Nothing here right now.';
 
@@ -1191,7 +1223,7 @@ export default function ResellerRequestQueue() {
     return (
       <TierContext.Provider value={tier}>
       <ScrollView className="flex-1" style={{ backgroundColor: PAGE_BG }} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 24, gap: 12 }}>
-        <View className="flex-row items-stretch" style={{ gap: 6 }}>
+        <View className="flex-row items-center" style={{ gap: 6 }}>
           {WORKING_STAGES.map((stage, index) => {
             const meta = STAGE_META[stage];
             const active = activeStage === stage;
@@ -1222,12 +1254,7 @@ export default function ResellerRequestQueue() {
               </View>
             );
           })}
-        </View>
-
-        <View className="flex-row items-center justify-between">
-          <View className="flex-row" style={{ gap: 8 }}>
-            {SIDE_STAGES.map(sidePill)}
-          </View>
+          {SIDE_STAGES.map(sidePill)}
         </View>
 
         {hubView ?? (
@@ -1327,7 +1354,7 @@ export default function ResellerRequestQueue() {
         <FlatList
           data={stageJobs}
           keyExtractor={(item) => `${item.kind}-${item.id}`}
-          renderItem={({ item }) => jobRow(item)}
+          renderItem={({ item, index }) => jobRow(item, index)}
           ListEmptyComponent={<Text className="text-gray-500">{emptyText}</Text>}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 90 }}
         />

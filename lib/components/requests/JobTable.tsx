@@ -17,21 +17,21 @@ import { getErrorMessage, showAlert } from '../../utils/alert';
 // The Date is a column of its own at every size.
 // Below that it keeps the tight size and scrolls sideways (JobTableScroll) instead of squeezing.
 export type Tier = 'full' | 'compact' | 'tight';
-export type ColKey = 'token' | 'when' | 'job' | 'customer' | 'where' | 'amount' | 'tech' | 'status' | 'assign' | 'actions';
+export type ColKey = 'sn' | 'token' | 'when' | 'job' | 'customer' | 'where' | 'amount' | 'tech' | 'status' | 'assign' | 'actions';
 
 export const TIER_COLUMNS: Record<Tier, ColKey[]> = {
-  full: ['token', 'when', 'job', 'customer', 'where', 'amount', 'tech', 'status', 'actions'],
-  compact: ['token', 'when', 'job', 'customer', 'amount', 'tech', 'status', 'actions'],
-  tight: ['token', 'when', 'job', 'customer', 'amount', 'status', 'actions'],
+  full: ['sn', 'token', 'when', 'job', 'customer', 'where', 'amount', 'tech', 'status', 'actions'],
+  compact: ['sn', 'token', 'when', 'job', 'customer', 'amount', 'tech', 'status', 'actions'],
+  tight: ['sn', 'token', 'when', 'job', 'customer', 'amount', 'status', 'actions'],
 };
 /** Every column has a fixed width. Room left over is not given to one column but shared out as
  * equal gaps between all of them (the rows are `space-between`), so the space from one column to
  * the next is the same all along the table. Job, Customer and Address are the only ones that give
  * a little width back when the table is narrower than the sum. */
 export const TIER_WIDTH: Record<Tier, Partial<Record<ColKey, number>>> = {
-  full: { token: 64, when: 84, job: 240, customer: 210, where: 170, amount: 136, tech: 144, status: 228, actions: 244 },
-  compact: { token: 64, when: 84, job: 220, customer: 230, amount: 132, tech: 128, status: 212, actions: 236 },
-  tight: { token: 56, when: 78, job: 210, customer: 220, amount: 128, status: 190, actions: 228 },
+  full: { sn: 36, token: 64, when: 84, job: 240, customer: 210, where: 170, amount: 136, tech: 144, status: 228, actions: 244 },
+  compact: { sn: 34, token: 64, when: 84, job: 220, customer: 230, amount: 132, tech: 128, status: 212, actions: 236 },
+  tight: { sn: 30, token: 56, when: 78, job: 210, customer: 220, amount: 128, status: 190, actions: 228 },
 };
 /** The columns that may shrink a little to fit; every other one keeps its width. */
 const SHRINKS: ColKey[] = ['job', 'customer', 'where'];
@@ -59,6 +59,7 @@ export function columnStyle(tier: Tier, key: ColKey, splitAssign?: boolean) {
  * row alike. */
 export const AMOUNT_PAD = 12;
 export const HEAD_LABEL: Record<ColKey, string> = {
+  sn: 'SN no.',
   token: 'Token no.',
   when: 'Date',
   job: 'Job',
@@ -132,9 +133,12 @@ export function JobTableScroll({ available, gap = 6, children }: { available: nu
   );
 }
 
-/** Assigned / WIP / Hold / Completed as four thin bars with their short words above: the step the job
- * is on is green, finished ones dark grey, the rest light. A longer word gets a longer bar, so none
- * is cut short. `note` is the line under it: two lines at most, then an ellipsis. */
+/** Where the job is right now - Assigned, WIP, Hold or Completed (or, once finished, Completed,
+ * Billed or Paid) - as one small badge instead of all four/three steps always laid out side by
+ * side, which only ever needed the one that matters and was eating the row's width. The step the
+ * job is actually on (`current`) is the green badge; if none is current (e.g. a cancelled job,
+ * which has no "current" step), the furthest one already reached is shown instead, in grey.
+ * `note` is the line under it: two lines at most, then an ellipsis. */
 export function JobProgressBars({
   steps,
   note,
@@ -145,22 +149,20 @@ export function JobProgressBars({
   /** Small lines under the note - when the job started, how long it has run, and so on. */
   details?: string[];
 }) {
+  const shown = steps.find((s) => s.state === 'current') ?? [...steps].reverse().find((s) => s.state === 'done');
+  const live = shown?.state === 'current';
   return (
     <View style={{ gap: 3 }}>
-      <View className="flex-row" style={{ gap: 4 }}>
-        {steps.map((step) => {
-          const word = step.state === 'current' ? '#15803D' : step.state === 'done' ? '#374151' : '#9CA3AF';
-          const bar = step.state === 'current' ? '#16A34A' : step.state === 'done' ? '#4B5563' : '#E5E7EB';
-          return (
-            <View key={step.label} style={{ flexBasis: 0, flexGrow: step.label.length + 2, minWidth: 0, gap: 3 }}>
-              <Text className="text-[10px] font-semibold" style={{ color: word }} numberOfLines={1}>
-                {step.label}
-              </Text>
-              <View style={{ height: 4, borderRadius: 2, backgroundColor: bar }} />
-            </View>
-          );
-        })}
-      </View>
+      {shown && (
+        <View
+          className="flex-row self-start items-center rounded-full px-2"
+          style={{ height: 18, backgroundColor: live ? '#DCFCE7' : '#F3F4F6' }}
+        >
+          <Text className="text-[10.5px] font-bold" style={{ color: live ? '#15803D' : '#374151' }} numberOfLines={1}>
+            {shown.label}
+          </Text>
+        </View>
+      )}
       {!!note && (
         <Text className="text-[10.5px] text-gray-600" numberOfLines={2}>
           {note}

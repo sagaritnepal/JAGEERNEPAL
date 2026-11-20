@@ -19,7 +19,6 @@ import { useBackStep } from '../../hooks/useBackStep';
 import { editJobHref, newJobHref } from '../../utils/newJobHref';
 import { canMarkJobDone, useMarkJobDone } from '../../hooks/useMarkJobDone';
 import { PersonAvatar } from '../PersonAvatar';
-import { timeAgo } from '../NotificationRow';
 import { CategoryBadge } from '../CategoryBadge';
 import { showAlert, getErrorMessage } from '../../utils/alert';
 import { formatScheduledWhen } from '../../utils/scheduledTime';
@@ -1048,6 +1047,7 @@ function JobRowCard({
  * them) come from JobTable.tsx; a narrower table folds Address and Technician under the customer
  * and the date under the job. */
 function JobCompactRow({
+  sn,
   request: r,
   times,
   now,
@@ -1059,6 +1059,8 @@ function JobCompactRow({
   onMarkDone,
   busy,
 }: {
+  /** This row's position in the list, 1-based - the SN no. column. */
+  sn: number;
   request: ServiceRequest;
   times: JobTimes | undefined;
   /** The current time, ticking each minute, so "Running: 2h 10m" keeps counting. */
@@ -1079,10 +1081,6 @@ function JobCompactRow({
   const issue = splitIssue(r.issue_type);
   const overdue = isOverdue(r);
   const dateText = numericDateLabel(r.scheduled_date ?? entryDay(null, r.created_at));
-  // When the job was put in, under the date: "2 days ago, 14:41" rather than just the bare time.
-  const registered = new Date(r.created_at);
-  const registeredTime = `${String(registered.getHours()).padStart(2, '0')}:${String(registered.getMinutes()).padStart(2, '0')}`;
-  const registeredAgo = timeAgo(r.created_at);
   // What the customer wrote when they asked for the job.
   const customerRequest = r.description?.trim();
 
@@ -1129,6 +1127,12 @@ function JobCompactRow({
         borderColor: '#E5E7EB',
       }}
     >
+      {has('sn') && (
+        <Text className="text-[12px] text-gray-500" style={{ width: w.sn, flexShrink: 0 }} numberOfLines={1}>
+          {sn}
+        </Text>
+      )}
+
       <Text className="text-[12px] font-bold text-gray-800" style={{ width: w.token, flexShrink: 0 }} numberOfLines={1}>
         {ticketLabel(r.ticket_no) ?? '—'}
       </Text>
@@ -1137,9 +1141,6 @@ function JobCompactRow({
         <View style={{ width: w.when, flexShrink: 0 }}>
           <Text className="text-[12px] text-gray-800" numberOfLines={1}>
             {dateText || '—'}
-          </Text>
-          <Text className="text-[10.5px] text-gray-500" numberOfLines={1}>
-            {`Added ${registeredAgo}, ${registeredTime}`}
           </Text>
         </View>
       )}
@@ -1351,9 +1352,10 @@ function JobList({
       {compact ? (
         <JobTableScroll available={boxWidth}>
           <JobTableHeader tier={tier} splitAssign />
-          {jobs.map((r) => (
+          {jobs.map((r, index) => (
             <JobCompactRow
               key={r.id}
+              sn={index + 1}
               request={r}
               times={times?.get(r.id)}
               now={now}
