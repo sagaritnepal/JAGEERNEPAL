@@ -19,6 +19,7 @@ import { useBackStep } from '../../hooks/useBackStep';
 import { editJobHref, newJobHref } from '../../utils/newJobHref';
 import { canMarkJobDone, useMarkJobDone } from '../../hooks/useMarkJobDone';
 import { PersonAvatar } from '../PersonAvatar';
+import { timeAgo } from '../NotificationRow';
 import { CategoryBadge } from '../CategoryBadge';
 import { showAlert, getErrorMessage } from '../../utils/alert';
 import { formatScheduledWhen } from '../../utils/scheduledTime';
@@ -1078,9 +1079,10 @@ function JobCompactRow({
   const issue = splitIssue(r.issue_type);
   const overdue = isOverdue(r);
   const dateText = numericDateLabel(r.scheduled_date ?? entryDay(null, r.created_at));
-  // The time the job was put in, under the date.
+  // When the job was put in, under the date: "2 days ago, 14:41" rather than just the bare time.
   const registered = new Date(r.created_at);
   const registeredTime = `${String(registered.getHours()).padStart(2, '0')}:${String(registered.getMinutes()).padStart(2, '0')}`;
+  const registeredAgo = timeAgo(r.created_at);
   // What the customer wrote when they asked for the job.
   const customerRequest = r.description?.trim();
 
@@ -1137,7 +1139,7 @@ function JobCompactRow({
             {dateText || '—'}
           </Text>
           <Text className="text-[10.5px] text-gray-500" numberOfLines={1}>
-            {`Added ${registeredTime}`}
+            {`Added ${registeredAgo}, ${registeredTime}`}
           </Text>
         </View>
       )}
