@@ -8,7 +8,6 @@ import {
   ScrollView,
   Image,
   Platform,
-  Modal,
   useWindowDimensions,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -29,7 +28,6 @@ import { showAlert, getErrorMessage } from '../../lib/utils/alert';
 import { resizeImageForUpload } from '../../lib/utils/resizeImage';
 import { returnPathOr } from '../../lib/utils/returnPath';
 import { ServiceDropdown } from '../../lib/components/ServiceDropdown';
-import { pickPhoneContact } from '../../lib/utils/pickPhoneContact';
 import { usePhoneContacts } from '../../lib/hooks/usePhoneContacts';
 import { ContactPickerModal } from '../../lib/components/ContactPickerModal';
 import { isValidPhone10 } from '../../lib/utils/phone';
@@ -89,13 +87,6 @@ function ResellerRequestDetails() {
 
   const [customerId, setCustomerId] = useState<string | null>(null);
   const [showNameSuggestions, setShowNameSuggestions] = useState(false);
-  const [showNewCustomerModal, setShowNewCustomerModal] = useState(false);
-  const [newCustName, setNewCustName] = useState('');
-  const [newCustPhone, setNewCustPhone] = useState('');
-  const [newCustAddress, setNewCustAddress] = useState('');
-  const [newCustCoords, setNewCustCoords] = useState<Coords | null>(null);
-  const [showNewCustLocationPicker, setShowNewCustLocationPicker] = useState(false);
-  const [savingNewCustomer, setSavingNewCustomer] = useState(false);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [companyName, setCompanyName] = useState('');
@@ -140,13 +131,6 @@ function ResellerRequestDetails() {
     setExistingPhotos(editRequest.photo_urls ?? []);
     setHydrated(true);
   }, [editRequest, hydrated]);
-
-  async function handlePickNewCustFromContacts() {
-    const picked = await pickPhoneContact();
-    if (!picked) return;
-    if (picked.name) setNewCustName(picked.name);
-    if (picked.phone) setNewCustPhone(picked.phone);
-  }
 
   function handleSelectCustomer(customer: Customer) {
     setCustomerId(customer.id);
@@ -203,47 +187,6 @@ function ResellerRequestDetails() {
     if (phone) setCustomerPhone(phone);
   }
 
-  function openNewCustomerModal() {
-    setNewCustName(customerName.trim());
-    setNewCustPhone(customerPhone.trim());
-    setNewCustAddress(address.trim());
-    setNewCustCoords(coords);
-    setShowNewCustomerModal(true);
-  }
-
-  function closeNewCustomerModal() {
-    setShowNewCustomerModal(false);
-  }
-
-  async function handleSaveNewCustomer() {
-    if (!userId || !newCustName.trim()) {
-      showAlert('Add a name', "Enter the customer's name to save them.");
-      return;
-    }
-    if (newCustPhone.trim() && !isValidPhone10(newCustPhone)) {
-      showAlert('Check the phone number', 'Enter a 10-digit phone number, or leave it blank.');
-      return;
-    }
-    setSavingNewCustomer(true);
-    try {
-      const created = await createCustomer.mutateAsync({
-        owner_id: userId,
-        name: newCustName.trim(),
-        phone: newCustPhone.trim() || null,
-        address: newCustAddress.trim() || null,
-        latitude: newCustCoords?.latitude ?? null,
-        longitude: newCustCoords?.longitude ?? null,
-      });
-      handleSelectCustomer(created);
-      setShowNewCustomerModal(false);
-      showAlert('Customer added', `${newCustName.trim()} has been saved to My Customers.`);
-    } catch (err) {
-      showAlert('Could not add customer', getErrorMessage(err));
-    } finally {
-      setSavingNewCustomer(false);
-    }
-  }
-
   async function handlePickPhoto(index: number) {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
@@ -281,20 +224,16 @@ function ResellerRequestDetails() {
       showAlert('Please sign in', 'Your session may have expired — sign in again and retry.');
       return;
     }
-    if (!service) {
-      showAlert('Choose a service', 'Pick what the technician is needed for.');
+    if (!customerName.trim()) {
+      showAlert('Add the customer name', 'Enter who this request is for.');
       return;
     }
-    if (!customerName.trim() || !customerPhone.trim()) {
-      showAlert('Add customer details', "Enter the customer's name and phone so the technician can reach them.");
+    if (customerPhone.trim() && !isValidPhone10(customerPhone)) {
+      showAlert('Check the phone number', "Enter the customer's 10-digit phone number, or leave it blank.");
       return;
     }
-    if (!isValidPhone10(customerPhone)) {
-      showAlert('Check the phone number', "Enter the customer's 10-digit phone number.");
-      return;
-    }
-    if (!date.trim() || !time.trim()) {
-      showAlert('Add date and time', 'Let us know when you need this service.');
+    if (!date.trim()) {
+      showAlert('Add a date', 'Let us know when you need this service.');
       return;
     }
     // An overdue job can still be edited: only a date that was changed has to be in the future.
@@ -311,6 +250,9 @@ function ResellerRequestDetails() {
       showAlert('Invalid price', 'Enter a valid price in NPR, or leave it blank if you don\'t know it yet.');
       return;
     }
+    // Service is optional now - fall back to a placeholder so issue_type (not-null in the
+    // database) still gets a value, and still parses back into category/action on edit.
+    const issueType = service ? `${category} - ${action}` : 'General - Not specified';
 
     submittingRef.current = true;
     setSubmitting(true);
@@ -331,22 +273,23 @@ function ResellerRequestDetails() {
         // A changed address no longer matches the saved map pin - drop it rather than send the technician to the old place.
         const location_data =
           addressChanged && !pinMoved ? { address: address.trim() } : { ...coords, address: address.trim() };
-        const serviceChanged =
-          service.category !== initialService.current?.category || service.action !== initialService.current?.action;
+        const serviceChanged = !!service && (
+          service.category !== initialService.current?.category || service.action !== initialService.current?.action
+        );
         await updateRequest.mutateAsync({
           id: editRequest.id,
           values: {
             customer_id: customerId,
             customer_name: customerName.trim(),
-            customer_phone: customerPhone.trim(),
+            customer_phone: customerPhone.trim() || null,
             contact_person_name: customerName.trim(),
-            contact_person_phone: customerPhone.trim(),
+            contact_person_phone: customerPhone.trim() || null,
             company_name: (companySameAsCustomer ? customerName : companyName).trim() || null,
-            issue_type: serviceChanged ? `${category} - ${action}` : editRequest.issue_type,
+            issue_type: serviceChanged ? issueType : editRequest.issue_type,
             description: notes.trim() || null,
             quoted_price: price,
             scheduled_date: date.trim(),
-            scheduled_time: time.trim(),
+            scheduled_time: time.trim() || null,
             location_data,
             photo_urls: [...existingPhotos, ...photoUrls],
           } as any,
@@ -364,7 +307,7 @@ function ResellerRequestDetails() {
       try {
         const customerValues = {
           name: customerName.trim(),
-          phone: customerPhone.trim(),
+          phone: customerPhone.trim() || null,
           address: address.trim() || null,
           latitude: coords?.latitude ?? null,
           longitude: coords?.longitude ?? null,
@@ -392,16 +335,16 @@ function ResellerRequestDetails() {
         customer_id: linkedCustomerId,
         origin: 'reseller',
         customer_name: customerName.trim(),
-        customer_phone: customerPhone.trim(),
+        customer_phone: customerPhone.trim() || null,
         contact_person_name: customerName.trim(),
-        contact_person_phone: customerPhone.trim(),
+        contact_person_phone: customerPhone.trim() || null,
         company_name: (companySameAsCustomer ? customerName : companyName).trim() || null,
-        issue_type: `${category} - ${action}`,
+        issue_type: issueType,
         description: notes.trim() || null,
         status: 'pending',
         quoted_price: price,
         scheduled_date: date.trim(),
-        scheduled_time: time.trim(),
+        scheduled_time: time.trim() || null,
         location_data: { ...coords, address: address.trim() },
         photo_urls: photoUrls,
       });
@@ -421,12 +364,13 @@ function ResellerRequestDetails() {
     }
   }
 
+  // Only name, date and location are required; everything else (service, phone, time, photos,
+  // notes, price) is optional. A phone that was typed but isn't valid still needs fixing though.
   const missing: string[] = [];
-  if (!service) missing.push('service');
-  if (!customerName.trim()) missing.push('customer');
-  if (!isValidPhone10(customerPhone)) missing.push(customerPhone.trim() ? '10-digit phone' : 'phone');
+  if (!customerName.trim()) missing.push('customer name');
   if (!address.trim() && !coords) missing.push('location');
-  if (!date.trim() || !time.trim()) missing.push('date & time');
+  if (!date.trim()) missing.push('date');
+  if (customerPhone.trim() && !isValidPhone10(customerPhone)) missing.push('valid phone number');
   const missingText = missing.join(', ').replace(/^./, (ch) => ch.toUpperCase());
 
   const cardWidth = isWideWeb ? ('calc((100% - 16px) / 2)' as unknown as number) : undefined;
@@ -510,12 +454,13 @@ function ResellerRequestDetails() {
 
         <View style={{ flexDirection: isWideWeb ? 'row' : 'column', flexWrap: 'wrap', gap: isWideWeb ? 16 : 12 }}>
           <NumberedCard n={1} title="Who is it for?" subtitle="Saved customer or phone contact" wide={isWideWeb} width={cardWidth}>
+            <FieldLabel required>Customer name</FieldLabel>
             <Pressable
               onPress={() => {
                 phoneContacts.request();
                 setShowNameSuggestions(true);
               }}
-              className="flex-row items-center gap-2.5 rounded-lg border border-gray-300 bg-white px-3"
+              className="mb-2.5 flex-row items-center gap-2.5 rounded-lg border border-gray-300 bg-white px-3"
               style={{ minHeight: 48 }}
             >
               {customerName ? (
@@ -536,9 +481,6 @@ function ResellerRequestDetails() {
               )}
               <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
             </Pressable>
-            <Pressable onPress={openNewCustomerModal} className="self-start py-2.5" hitSlop={4}>
-              <Text className="text-[13px] font-semibold text-blue-600">+ Add a new customer manually</Text>
-            </Pressable>
 
             {!customerId &&
               customerName.trim().length > 0 &&
@@ -556,7 +498,7 @@ function ResellerRequestDetails() {
                 </View>
               )}
 
-            <Text className="mb-1.5 text-sm font-medium text-gray-700">Customer phone</Text>
+            <FieldLabel>Customer phone</FieldLabel>
             <TextInput
               value={customerPhone}
               onChangeText={(v) => setCustomerPhone(digitsInput(v))}
@@ -587,6 +529,7 @@ function ResellerRequestDetails() {
           </NumberedCard>
 
           <NumberedCard n={2} title="Where and when?" subtitle="Seen by the technician before accepting" wide={isWideWeb} width={cardWidth}>
+            <FieldLabel required>Location</FieldLabel>
             {isWideWeb ? (
               <View className="flex-row gap-2.5">
                 <TextInput
@@ -614,11 +557,11 @@ function ResellerRequestDetails() {
 
             <View className="mt-3.5 flex-row gap-2.5">
               <View className="flex-1">
-                <Text className="mb-1.5 text-sm font-medium text-gray-700">Date</Text>
+                <FieldLabel required>Date</FieldLabel>
                 <DateField value={date} onChange={setDate} />
               </View>
               <View className="flex-1">
-                <Text className="mb-1.5 text-sm font-medium text-gray-700">Time</Text>
+                <FieldLabel>Time</FieldLabel>
                 <TimeField value={time} onChange={setTime} />
               </View>
             </View>
@@ -736,72 +679,6 @@ function ResellerRequestDetails() {
         onClose={() => setShowNameSuggestions(false)}
       />
 
-      <Modal
-        visible={showNewCustomerModal}
-        transparent
-        animationType="fade"
-        onRequestClose={closeNewCustomerModal}
-      >
-        <Pressable className="flex-1 items-center justify-center bg-black/40 px-6" onPress={closeNewCustomerModal}>
-          <Pressable onPress={() => {}} className="w-full max-w-sm rounded-xl bg-white p-4">
-            <Text className="mb-3 text-base font-semibold text-gray-900">New customer</Text>
-            <Text className="mb-1 text-xs font-medium text-gray-600">Name</Text>
-            <View className="mb-3 flex-row items-center rounded-lg border border-gray-300 bg-white">
-              <TextInput
-                value={newCustName}
-                onChangeText={setNewCustName}
-                placeholder="Customer name"
-                className="flex-1 px-3 py-2 text-sm"
-              />
-              {Platform.OS !== 'web' && (
-                <Pressable onPress={handlePickNewCustFromContacts} hitSlop={8} className="px-2.5">
-                  <Ionicons name="person-add-outline" size={18} color="#1d4ed8" />
-                </Pressable>
-              )}
-            </View>
-            <Text className="mb-1 text-xs font-medium text-gray-600">Contact no.</Text>
-            <TextInput
-              value={newCustPhone}
-              onChangeText={(v) => setNewCustPhone(digitsInput(v))}
-              placeholder="98XXXXXXXX"
-              keyboardType="phone-pad"
-              maxLength={10}
-              className="mb-3 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
-            />
-            <Text className="mb-1 text-xs font-medium text-gray-600">Location</Text>
-            <Pressable
-              onPress={() => setShowNewCustLocationPicker(true)}
-              className="mb-2 flex-row items-center justify-center gap-1.5 rounded-lg border border-blue-700 bg-blue-50 py-2"
-            >
-              <Ionicons name="locate" size={14} color="#1D4ED8" />
-              <Text className="text-xs font-semibold text-blue-700">
-                {newCustCoords ? 'Location set — tap to change' : 'Select location'}
-              </Text>
-            </Pressable>
-            <TextInput
-              value={newCustAddress}
-              onChangeText={setNewCustAddress}
-              placeholder="House/street, city, area"
-              multiline
-              className="mb-4 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm"
-              style={{ minHeight: 50, textAlignVertical: 'top' }}
-            />
-            <View className="flex-row justify-end gap-3">
-              <Pressable onPress={closeNewCustomerModal} className="px-3 py-2">
-                <Text className="text-sm font-semibold text-gray-500">Cancel</Text>
-              </Pressable>
-              <Pressable
-                onPress={handleSaveNewCustomer}
-                disabled={savingNewCustomer}
-                className="rounded-lg bg-orange-500 px-4 py-2 disabled:opacity-50"
-              >
-                <Text className="text-sm font-semibold text-white">{savingNewCustomer ? 'Saving…' : 'Save'}</Text>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
       <LocationPickerModal
         visible={showLocationPicker}
         initialCoords={coords}
@@ -812,18 +689,18 @@ function ResellerRequestDetails() {
         }}
         onClose={() => setShowLocationPicker(false)}
       />
-
-      <LocationPickerModal
-        visible={showNewCustLocationPicker}
-        initialCoords={newCustCoords}
-        onConfirm={(nextCoords, nextAddress) => {
-          setNewCustCoords(nextCoords);
-          if (nextAddress) setNewCustAddress(nextAddress);
-          setShowNewCustLocationPicker(false);
-        }}
-        onClose={() => setShowNewCustLocationPicker(false)}
-      />
     </View>
+  );
+}
+
+/** A field's label, with a red asterisk for the handful that are actually required
+ * (customer name, location, date) - everything else in this form is optional. */
+function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
+  return (
+    <Text className="mb-1.5 text-sm font-medium text-gray-700">
+      {children}
+      {required && <Text className="text-red-500"> *</Text>}
+    </Text>
   );
 }
 
