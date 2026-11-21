@@ -188,8 +188,12 @@ function overdueBy(request: ServiceRequest): string {
 
 function OverdueChip() {
   return (
-    <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: '#FEF2F2' }}>
-      <Text className="text-[10.5px] font-bold" style={{ color: '#B91C1C' }}>
+    <View
+      className="self-start flex-row items-center rounded-full pl-1.5 pr-2"
+      style={{ height: 20, gap: 4, backgroundColor: '#FEF2F2' }}
+    >
+      <Ionicons name="alert-circle" size={11} color="#B91C1C" />
+      <Text className="text-[10.5px] font-bold" style={{ color: '#B91C1C' }} numberOfLines={1}>
         Overdue
       </Text>
     </View>
@@ -1255,16 +1259,18 @@ function JobCompactRow({
         ))}
       </View>
 
+      {/* Same height and shape as the status card beside it, so the row reads as one family of cards
+          instead of a tiny chip next to an oversized button. */}
       <View style={{ width: widthOf(tier, 'assign', true), flexShrink: 0 }}>
         <Pressable
           onPress={mainPress}
           disabled={busy}
           accessibilityLabel={mainLabel}
-          className="flex-row items-center justify-center rounded-lg disabled:opacity-50"
-          style={{ height: ROW_BUTTON_HEIGHT, paddingHorizontal: 8, gap: 5, minWidth: 0, backgroundColor: '#0F766E' }}
+          className="self-start flex-row items-center rounded-full disabled:opacity-50"
+          style={{ height: 20, paddingHorizontal: 8, gap: 4, minWidth: 0, backgroundColor: '#0F766E' }}
         >
-          <Ionicons name={mainIcon} size={14} color="#FFFFFF" />
-          <Text className="text-[12px] font-semibold text-white" style={{ flexShrink: 1 }} numberOfLines={1}>
+          <Ionicons name={mainIcon} size={11} color="#FFFFFF" />
+          <Text className="text-[10.5px] font-bold text-white" style={{ flexShrink: 1 }} numberOfLines={1}>
             {mainLabel}
           </Text>
         </Pressable>
