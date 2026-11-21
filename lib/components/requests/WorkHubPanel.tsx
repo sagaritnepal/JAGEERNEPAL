@@ -362,7 +362,7 @@ export const WORKED_GREEN = '#4ADE80';
 export const UNUSED_RED = '#F87171';
 
 /** How tall one hour is in an employee's day. */
-const HOUR_PX = 36;
+export const HOUR_PX = 36;
 const DAY_PX = 24 * HOUR_PX;
 /** The hour numbers (and the day's colour behind them) run down the middle of the day. */
 const HOURS_PX = 22;
