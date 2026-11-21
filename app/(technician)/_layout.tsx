@@ -14,13 +14,12 @@ import { useAuthStore } from '../../lib/hooks/useAuth';
 import { useMyEmployment, useMyStaffRole } from '../../lib/hooks/useTechnicianEmployment';
 import { useShareLiveLocation } from '../../lib/hooks/useShareLiveLocation';
 
-// An employee also gets the Worksheet (their employer's work, to choose from), and a supervisor
-// the same screen under the same name, for handing it out to the team instead of taking it.
+// An employee also gets the Worksheet (their employer's work, to choose from), and a supervisor the Work Hub (to hand it out).
 function navItems(isStaff: boolean, isSupervisor: boolean): WebNavItem[] {
   return [
     { href: '/(technician)/dashboard', label: 'Dashboard', icon: 'home' },
     ...(isStaff ? [{ href: '/(technician)/worksheet', label: 'Worksheet', icon: 'clipboard' } as WebNavItem] : []),
-    ...(isSupervisor ? [{ href: '/(technician)/workhub', label: 'Worksheet', icon: 'grid' } as WebNavItem] : []),
+    ...(isSupervisor ? [{ href: '/(technician)/workhub', label: 'Work Hub', icon: 'grid' } as WebNavItem] : []),
     { href: '/(technician)/jobs', label: 'My Jobs', icon: 'briefcase' },
     { href: '/(technician)/earnings', label: 'Earnings', icon: 'wallet' },
   ];
@@ -83,8 +82,8 @@ export default function TechnicianLayout() {
       <Tabs.Screen
         name="workhub"
         options={{
-          title: 'Worksheet',
-          tabBarLabel: 'Worksheet',
+          title: 'Work Hub',
+          tabBarLabel: 'Work',
           // Hidden unless their employer made them a supervisor - the
           // screen itself says as much if it's reached directly.
           href: isSupervisor ? undefined : null,

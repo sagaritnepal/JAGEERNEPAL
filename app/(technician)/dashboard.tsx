@@ -1,11 +1,13 @@
 // app/(technician)/dashboard.tsx
 import { useMemo } from 'react';
+import { View } from 'react-native';
 import { router } from 'expo-router';
 import { useAuthStore } from '../../lib/hooks/useAuth';
 import { useSupabaseQuery } from '../../lib/hooks/useSupabase';
 import { resolveVisualKey } from '../../lib/constants/categoryIcons';
 import { TechnicianDashboardView } from '../../lib/components/technician/TechnicianDashboardView';
 import { WorkingNowCard } from '../../lib/components/technician/WorkingNowCard';
+import { MyDayTimeline } from '../../lib/components/technician/MyDayTimeline';
 import { isoOfLocalDate, type Completion } from '../../lib/utils/dashboardStats';
 import { jobCardAmount, type JobCardWithQuote } from './earnings';
 
@@ -57,8 +59,15 @@ export default function TechnicianDashboard() {
         router.push({ pathname: '/(technician)/jobs', params: { tab: 'completed', t: String(Date.now()) } })
       }
       onOpenEarnings={() => router.push('/(technician)/earnings')}
-      // What they are working on right now sits just under the two big tiles.
-      workingNow={userId ? <WorkingNowCard technicianId={userId} /> : null}
+      // What they are working on right now, then today's own timeline, sit just under the two big tiles.
+      workingNow={
+        userId ? (
+          <View style={{ gap: 12 }}>
+            <WorkingNowCard technicianId={userId} />
+            <MyDayTimeline technicianId={userId} />
+          </View>
+        ) : null
+      }
     />
   );
 }

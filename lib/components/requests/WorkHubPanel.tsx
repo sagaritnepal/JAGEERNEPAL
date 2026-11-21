@@ -95,7 +95,7 @@ function money(n: number | null | undefined): string {
 /** When each job's technician started and finished it, by job - the two
  * moments the timeline needs that the request itself does not carry. Asked for
  * in chunks so a reseller with hundreds of jobs does not build a huge address. */
-function useJobTimes(requestIds: string[]) {
+export function useJobTimes(requestIds: string[]) {
   const { data } = useQuery({
     queryKey: ['job-card-times', requestIds],
     queryFn: async () => {
@@ -257,7 +257,7 @@ type DaySpan = { id: string; request: ServiceRequest; ticket: string | null; tit
 /** The stretches of a day a technician spent on jobs: from when they started it (the job card) to when
  * they finished it - or to now, while it is still under way. A job that began yesterday starts at
  * midnight; one with no recorded start or finish is left out rather than guessed. */
-function workedOn(
+export function workedOn(
   requests: ServiceRequest[],
   times: Map<string, JobTimes> | undefined,
   technicianId: string,
@@ -291,7 +291,7 @@ type OfferSpan = { id: string; request: ServiceRequest; ticket: string | null; t
 
 /** The jobs assigned to a technician on a day, each as the stretch it waited for them to accept. Once
  * accepted it stays here as how long the wait was, and its work shows on the other side of the rail. */
-function offeredOn(
+export function offeredOn(
   requests: ServiceRequest[],
   times: Map<string, JobTimes> | undefined,
   technicianId: string,
@@ -322,7 +322,7 @@ function offeredOn(
 }
 
 /** "09:00:00" -> 540 minutes from midnight. */
-function minutesOf(time: string | null | undefined, fallback: number): number {
+export function minutesOf(time: string | null | undefined, fallback: number): number {
   const match = /^(\d{1,2}):(\d{2})/.exec(time ?? '');
   return match ? Number(match[1]) * 60 + Number(match[2]) : fallback;
 }
@@ -334,7 +334,7 @@ function clock(minutes: number): string {
 
 /** The stretches of the day an employee was busy, minutes from midnight, with jobs that overlap merged
  * into one: it is the time they were busy, not the sum of the jobs. `spans` come in start order. */
-function busyIntervals(spans: DaySpan[]): [number, number][] {
+export function busyIntervals(spans: DaySpan[]): [number, number][] {
   const merged: [number, number][] = [];
   for (const s of spans) {
     const last = merged[merged.length - 1];
@@ -345,7 +345,7 @@ function busyIntervals(spans: DaySpan[]): [number, number][] {
 }
 
 /** How long an employee has worked today, and how much of their duty time so far no job filled. */
-function dayFigures(spans: DaySpan[], dutyFrom: number, dutyTo: number, nowMin: number) {
+export function dayFigures(spans: DaySpan[], dutyFrom: number, dutyTo: number, nowMin: number) {
   const busy = busyIntervals(spans);
   const worked = busy.reduce((sum, [from, to]) => sum + (to - from), 0);
   // Only duty time that has already gone by can have gone unused.
@@ -355,11 +355,11 @@ function dayFigures(spans: DaySpan[], dutyFrom: number, dutyTo: number, nowMin: 
   return { worked, unused: Math.max(0, duty - used) };
 }
 
-const minutesLabel = (minutes: number) => (minutes < 1 ? '0m' : formatDuration(minutes * 60_000));
+export const minutesLabel = (minutes: number) => (minutes < 1 ? '0m' : formatDuration(minutes * 60_000));
 
 /** In an employee's day: green for the time they worked, red for the duty time that went unused. */
-const WORKED_GREEN = '#4ADE80';
-const UNUSED_RED = '#F87171';
+export const WORKED_GREEN = '#4ADE80';
+export const UNUSED_RED = '#F87171';
 
 /** How tall one hour is in an employee's day. */
 const HOUR_PX = 36;
@@ -402,7 +402,7 @@ function inLanes<T extends { from: number; to: number }>(items: T[]) {
 
 /** One job on an employee's day: the stretch it was waiting for them (kind "offer", the left side) or
  * the stretch they worked on it (kind "work", the right side). */
-type DayItem = {
+export type DayItem = {
   /** Unique on the day: a job can stand on both sides. */
   id: string;
   request: ServiceRequest;
@@ -424,7 +424,7 @@ type DayItem = {
  * going) - its full card while it is open, a short label once it is done. Beside the hour numbers each
  * job also has a bar from its start to its end, so how long it held them can be read to the minute. A
  * red line marks now. */
-function EmployeeDay({
+export function EmployeeDay({
   items,
   busy,
   dutyFrom,
