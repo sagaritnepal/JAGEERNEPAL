@@ -92,8 +92,8 @@ function HoldPill({ holdStatus }: { holdStatus: ServiceRequest['hold_status'] })
   if (holdStatus === 'none') return null;
   return (
     <View className="mt-1.5 flex-row items-center gap-1 self-start rounded-full bg-amber-50 px-2 py-0.5">
-      <Ionicons name="pause-circle" size={11} color="#92400E" />
-      <Text className="text-[10px] font-semibold text-amber-800">
+      <Ionicons name="pause-circle" size={11} color="#D97706" />
+      <Text className="text-[10px] font-semibold text-amber-600">
         {holdStatus === 'requested' ? 'Hold requested' : 'On hold'}
       </Text>
     </View>

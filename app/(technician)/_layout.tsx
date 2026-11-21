@@ -14,13 +14,15 @@ import { useAuthStore } from '../../lib/hooks/useAuth';
 import { useMyEmployment, useMyStaffRole } from '../../lib/hooks/useTechnicianEmployment';
 import { useShareLiveLocation } from '../../lib/hooks/useShareLiveLocation';
 
-// An employee also gets the Worksheet (their employer's work, to choose from), and a supervisor the Work Hub (to hand it out).
+// An employee also gets the Worksheet (their employer's work, to choose from), and a supervisor
+// the same screen under the same name, for handing it out to the team instead of taking it.
 function navItems(isStaff: boolean, isSupervisor: boolean): WebNavItem[] {
   return [
     { href: '/(technician)/dashboard', label: 'Dashboard', icon: 'home' },
-    { href: '/(technician)/jobs', label: 'My Jobs', icon: 'briefcase' },
     ...(isStaff ? [{ href: '/(technician)/worksheet', label: 'Worksheet', icon: 'clipboard' } as WebNavItem] : []),
-    ...(isSupervisor ? [{ href: '/(technician)/workhub', label: 'Work Hub', icon: 'grid' } as WebNavItem] : []),
+    ...(isSupervisor ? [{ href: '/(technician)/workhub', label: 'Worksheet', icon: 'grid' } as WebNavItem] : []),
+    { href: '/(technician)/jobs', label: 'My Jobs', icon: 'briefcase' },
+    { href: '/(technician)/rewards', label: 'Rewards', icon: 'star' },
     { href: '/(technician)/earnings', label: 'Earnings', icon: 'wallet' },
   ];
 }
@@ -71,10 +73,6 @@ export default function TechnicianLayout() {
         }}
       />
       <Tabs.Screen
-        name="jobs"
-        options={{ title: 'My Jobs', tabBarIcon: ({ color, focused }) => <TabIcon name="briefcase" color={color} focused={focused} /> }}
-      />
-      <Tabs.Screen
         name="worksheet"
         options={{
           title: 'Worksheet',
@@ -86,8 +84,8 @@ export default function TechnicianLayout() {
       <Tabs.Screen
         name="workhub"
         options={{
-          title: 'Work Hub',
-          tabBarLabel: 'Work',
+          title: 'Worksheet',
+          tabBarLabel: 'Worksheet',
           // Hidden unless their employer made them a supervisor - the
           // screen itself says as much if it's reached directly.
           href: isSupervisor ? undefined : null,
@@ -95,11 +93,18 @@ export default function TechnicianLayout() {
         }}
       />
       <Tabs.Screen
+        name="jobs"
+        options={{ title: 'My Jobs', tabBarIcon: ({ color, focused }) => <TabIcon name="briefcase" color={color} focused={focused} /> }}
+      />
+      <Tabs.Screen
+        name="rewards"
+        options={{ title: 'Rewards', tabBarIcon: ({ color, focused }) => <TabIcon name="star" color={color} focused={focused} /> }}
+      />
+      <Tabs.Screen
         name="earnings"
         options={{ title: 'Earnings', tabBarIcon: ({ color, focused }) => <TabIcon name="wallet" color={color} focused={focused} /> }}
       />
       <Tabs.Screen name="profile" options={{ href: null, title: 'Profile' }} />
-      <Tabs.Screen name="rewards" options={{ href: null, title: 'Rewards' }} />
       <Tabs.Screen name="statement" options={{ href: null, title: 'Statement' }} />
       <Tabs.Screen name="job/[id]" options={{ href: null, title: 'Job Card' }} />
       <Tabs.Screen name="employment" options={{ href: null, title: 'Employment' }} />

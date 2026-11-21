@@ -33,7 +33,7 @@ function SectionRow({
   children?: React.ReactNode;
 }) {
   return (
-    <View className={`overflow-hidden rounded-2xl border border-orange-100 bg-white ${open ? '' : 'mb-2.5'}`}>
+    <View className={`overflow-hidden rounded-2xl border border-gray-200 bg-white ${open ? '' : 'mb-2.5'}`}>
       <Pressable onPress={onPress} className="flex-row items-center gap-3 px-4 py-3.5">
         <View className="h-9 w-9 items-center justify-center rounded-full bg-orange-50">
           <Ionicons name={icon} size={18} color="#2563eb" />
@@ -44,7 +44,7 @@ function SectionRow({
         </View>
         <Ionicons name={open ? 'chevron-up' : 'chevron-forward'} size={18} color="#9CA3AF" />
       </Pressable>
-      {open && <View className="mb-2.5 border-t border-orange-50 px-4 pb-4 pt-3">{children}</View>}
+      {open && <View className="mb-2.5 border-t border-gray-100 px-4 pb-4 pt-3">{children}</View>}
     </View>
   );
 }
@@ -120,7 +120,7 @@ export function RewardsScreen() {
         <Text className="text-lg font-extrabold tracking-wide text-orange-700">{code}</Text>
         <Ionicons name="pricetag-outline" size={18} color="#2563eb" />
       </View>
-      <Pressable onPress={handleShare} className="items-center rounded-lg bg-orange-500 py-2.5">
+      <Pressable onPress={handleShare} className="items-center rounded-xl bg-orange-600 py-2.5">
         <Text className="text-sm font-semibold text-white">Share code</Text>
       </Pressable>
     </SectionRow>
