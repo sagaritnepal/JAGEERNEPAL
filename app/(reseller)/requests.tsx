@@ -360,7 +360,7 @@ function ChalanView({
           <Text className="text-sm text-gray-500">Chalan number</Text>
           <Text className="text-[15px] font-bold text-gray-900">{number ?? 'Not written'}</Text>
         </View>
-        {!!technician?.full_name && fact('Done by', technician.full_name)}
+        {technician?.full_name ? fact('Done by', technician.full_name) : !!row.completed_by_name?.trim() && fact('Done by', row.completed_by_name.trim())}
         {parts.length > 0
           ? fact('Products', parts.map((p) => `${p.name} × ${p.quantity}`).join(', '))
           : !!card && fact('Products', 'None recorded')}

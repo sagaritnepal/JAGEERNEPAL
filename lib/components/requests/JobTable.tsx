@@ -62,7 +62,7 @@ export const HEAD_LABEL: Record<ColKey, string> = {
   sn: 'SN no.',
   /** Whatever number identifies this row - a job's token, a sale's bill no. - so it is one column
    * across every kind of row instead of "Token" sitting blank on rows that have no token. */
-  token: 'Trace no.',
+  token: 'Tracking no.',
   when: 'Date',
   job: 'Job',
   customer: 'Customer',

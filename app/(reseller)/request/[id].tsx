@@ -324,18 +324,21 @@ function CancelWorkButton({ request }: { request: ServiceRequest }) {
 /** "Mark as done" for work that was finished but never completed in the app (a technician who does
  * not use it). Moves the job to Completed, ready to bill; asks "are you sure?" first. */
 function MarkDoneButton({ request }: { request: ServiceRequest }) {
-  const { confirmMarkDone, doingId } = useMarkJobDone();
+  const { confirmMarkDone, doingId, dialog } = useMarkJobDone();
   if (!canMarkJobDone(request)) return null;
   const busy = doingId === request.id;
   return (
-    <DetailButton
-      label={busy ? 'Marking as done…' : 'Mark as done'}
-      icon="checkmark-done-outline"
-      kind="green"
-      height={42}
-      disabled={busy}
-      onPress={() => confirmMarkDone(request)}
-    />
+    <>
+      <DetailButton
+        label={busy ? 'Marking as done…' : 'Mark as done'}
+        icon="checkmark-done-outline"
+        kind="green"
+        height={42}
+        disabled={busy}
+        onPress={() => confirmMarkDone(request)}
+      />
+      {dialog}
+    </>
   );
 }
 

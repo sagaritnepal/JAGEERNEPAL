@@ -962,12 +962,22 @@ function JobRowCard({
         <Fact
           label="Technician"
           roomy={roomy}
-          icon={r.technician_id ? undefined : 'people-outline'}
-          initials={r.technician_id ? initialsOf(technicianName(r.technician_id)) : undefined}
+          icon={r.technician_id || r.completed_by_name?.trim() ? undefined : 'people-outline'}
+          initials={
+            r.technician_id
+              ? initialsOf(technicianName(r.technician_id))
+              : r.completed_by_name?.trim()
+                ? initialsOf(r.completed_by_name.trim())
+                : undefined
+          }
         >
           {r.technician_id ? (
             <Text className="text-[13.5px] font-semibold text-gray-900" numberOfLines={lines}>
               {technicianName(r.technician_id)}
+            </Text>
+          ) : r.completed_by_name?.trim() ? (
+            <Text className="text-[13.5px] font-semibold text-gray-900" numberOfLines={lines}>
+              {r.completed_by_name.trim()}
             </Text>
           ) : (
             <Text className="text-[13.5px] font-semibold" style={{ color: r.open_to_team ? '#047857' : '#4B5563' }}>
@@ -1108,7 +1118,9 @@ function JobCompactRow({
   const has = (key: ColKey) => columnsOf(tier, true).includes(key);
   const w = TIER_WIDTH[tier];
   const cell = { minWidth: 0 } as const;
-  const techText = r.technician_id ? technicianName(r.technician_id) : r.open_to_team ? 'Open to the team' : 'Nobody yet';
+  const techText = r.technician_id
+    ? technicianName(r.technician_id)
+    : r.completed_by_name?.trim() || (r.open_to_team ? 'Open to the team' : 'Nobody yet');
   // When the work began and how long it has been going (a job under way), or when it was offered and
   // how long it has been waiting for an answer. `now` ticks each minute, so the figure keeps counting.
   const stamp = (iso: string) => {
@@ -1468,7 +1480,7 @@ export function WorkHubPanel({
   const [busyId, setBusyId] = useState<string | null>(null);
   const { confirmCancelWork, busyId: cancellingId } = useCancelWork();
   const { confirmDeleteJob, deletingId } = useDeleteJob();
-  const { confirmMarkDone, doingId } = useMarkJobDone();
+  const { confirmMarkDone, doingId, dialog: markDoneDialog } = useMarkJobDone();
   const [exporting, setExporting] = useState<'pdf' | 'xlsx' | null>(null);
   const [assigning, setAssigning] = useState<{ request: ServiceRequest } | null>(null);
 
@@ -1634,7 +1646,9 @@ export function WorkHubPanel({
         Customer: r.customer_name ?? '',
         Phone: r.customer_phone ?? '',
         Address: r.location_data?.address ?? '',
-        'Assigned to': r.technician_id ? technicianName(r.technician_id) : r.open_to_team ? 'Open to team' : 'Nobody yet',
+        'Assigned to': r.technician_id
+          ? technicianName(r.technician_id)
+          : r.completed_by_name?.trim() || (r.open_to_team ? 'Open to team' : 'Nobody yet'),
         Status: STATUS_WORDS[r.status] ?? r.status,
         Payment: r.payment_status === 'paid' ? 'Paid' : 'Unpaid',
         Amount: r.quoted_price == null ? '' : Number(r.quoted_price),
@@ -2213,6 +2227,7 @@ export function WorkHubPanel({
         onClose={() => setAssigning(null)}
         busy={sending}
       />
+      {markDoneDialog}
     </View>
   );
 }

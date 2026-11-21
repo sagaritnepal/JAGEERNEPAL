@@ -179,6 +179,9 @@ export interface ServiceRequest {
   remark: string | null;
   /** Why the reseller cancelled the job - written in the cancel dialog (migration 0100). */
   cancel_reason?: string | null;
+  /** Who did a job with no app technician on it - typed in when the reseller marks it as done
+   * (migration 0111); null for a job that has (or always had) a technician_id. */
+  completed_by_name?: string | null;
   hold_status: HoldStatus;
   hold_note: string | null;
   hold_requested_at: string | null;
