@@ -7,6 +7,7 @@ import { useSupabaseRow, useSupabaseQuery, useSupabaseInsert, useSupabaseUpdate,
 import { useAuthStore } from '../../../lib/hooks/useAuth';
 import { useIsWideWeb } from '../../../lib/hooks/useWideGrid';
 import { RequestDetailsExtras } from '../../../lib/components/RequestDetailsExtras';
+import { ChalanPhotos } from '../../../lib/components/ChalanPhotos';
 import { PersonAvatar } from '../../../lib/components/PersonAvatar';
 import { PaymentQrModal } from '../../../lib/components/PaymentQrModal';
 import { SaveContactButtonLabeled } from '../../../lib/components/SaveContactButton';
@@ -143,6 +144,21 @@ function JobCardBreakdown({ jobCard, quotedPrice }: { jobCard: JobCard; quotedPr
           You pay the price you approved: NPR {Number(quotedPrice).toLocaleString()}.
         </Text>
       )}
+    </View>
+  );
+}
+
+/** The chalan the technician filed once the job is resolved - its number and any photo. Read-only
+ * here: only the technician who did the job can add or change it. */
+function ChalanCard({ request }: { request: ServiceRequest }) {
+  return (
+    <View className="mt-4 rounded-xl bg-white p-5">
+      <Text className="mb-3 text-sm capitalize tracking-wide text-gray-400">Chalan</Text>
+      <View className="flex-row items-center justify-between" style={{ gap: 12 }}>
+        <Text className="text-sm text-gray-500">Chalan number</Text>
+        <Text className="text-[15px] font-bold text-gray-900">{request.chalan_no?.trim() || 'Not written'}</Text>
+      </View>
+      <ChalanPhotos chalanUrls={request.chalan_urls} requestId={request.id} editable={false} onUploaded={() => {}} />
     </View>
   );
 }
@@ -419,6 +435,11 @@ function RequestDetail({ id }: { id: string }) {
       <JobCardBreakdown jobCard={jobCards[0]} quotedPrice={request.quoted_price} />
     );
 
+  const chalanCard =
+    request.status === 'resolved' && (!!request.chalan_no?.trim() || request.chalan_urls.length > 0) && (
+      <ChalanCard request={request} />
+    );
+
   const payNow =
     request.status === 'resolved' && request.payment_status !== 'paid' && (
       <PayNow request={request} amountDue={jobAmountDue(request.quoted_price, jobCards?.[0])} onPaid={refetch} />
@@ -449,6 +470,7 @@ function RequestDetail({ id }: { id: string }) {
           <View style={{ flex: 2, minWidth: 0, marginTop: -16 }}>
             {quoteApproval}
             {cancel}
+            {chalanCard}
             {jobBreakdown}
             {payNow}
             {rating}
@@ -467,6 +489,7 @@ function RequestDetail({ id }: { id: string }) {
       {cancel}
       {extras}
       {remark}
+      {chalanCard}
       {jobBreakdown}
       {payNow}
       {rating}
