@@ -587,7 +587,27 @@ export function EmployeeDay({
           ))}
         </View>
         {lane('work', right)}
-        {showNow && <View style={{ position: 'absolute', left: 0, right: 0, top: px(nowMin) - 1, height: 2, backgroundColor: '#DC2626' }} />}
+        {showNow && (
+          <>
+            <View style={{ position: 'absolute', left: 0, right: 0, top: px(nowMin) - 1, height: 2, backgroundColor: '#DC2626' }} />
+            <View
+              style={{
+                position: 'absolute',
+                left: 2,
+                top: px(nowMin) - 9,
+                borderRadius: 4,
+                paddingHorizontal: 4,
+                height: 18,
+                justifyContent: 'center',
+                backgroundColor: '#DC2626',
+              }}
+            >
+              <Text className="font-extrabold text-white" style={{ fontSize: 9.5 }}>
+                {clock(nowMin)}
+              </Text>
+            </View>
+          </>
+        )}
       </View>
     </View>
   );
