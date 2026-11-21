@@ -7,7 +7,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../supabase';
 import { JobTimeline } from '../JobTimeline';
 import { TicketChip } from '../TicketChip';
-import { ticketLabel } from '../../utils/ticket';
+import { ticketLabel, tokenCellLabel } from '../../utils/ticket';
 import { jobJourney, type JobTimes } from '../../utils/jobTimeline';
 import { useAuthStore } from '../../hooks/useAuth';
 import { subscribeToTable, useSupabaseQuery, useSupabaseUpdate } from '../../hooks/useSupabase';
@@ -1147,7 +1147,7 @@ function JobCompactRow({
       )}
 
       <Text className="text-[12px] font-bold text-gray-800" style={{ width: w.token, flexShrink: 0 }} numberOfLines={1}>
-        {ticketLabel(r.ticket_no) ?? '—'}
+        {tokenCellLabel(r.ticket_no)}
       </Text>
 
       {has('when') && (

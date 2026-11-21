@@ -428,7 +428,7 @@ function JobRowView({ data, stage, wide }: { data: JobRowData; stage: Stage; wid
           </Text>
         )}
         <Text className="text-[12px] font-bold text-gray-800" style={{ width: w.token, flexShrink: 0 }} numberOfLines={1}>
-          {data.token ?? '—'}
+          {data.token ? `Token no: ${data.token.replace(/^#/, '')}` : '—'}
         </Text>
 
         {has('when') && (

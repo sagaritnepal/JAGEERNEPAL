@@ -29,9 +29,9 @@ export const TIER_COLUMNS: Record<Tier, ColKey[]> = {
  * the next is the same all along the table. Job, Customer and Address are the only ones that give
  * a little width back when the table is narrower than the sum. */
 export const TIER_WIDTH: Record<Tier, Partial<Record<ColKey, number>>> = {
-  full: { sn: 36, token: 64, when: 84, job: 240, customer: 210, where: 170, amount: 136, tech: 144, status: 228, actions: 244 },
-  compact: { sn: 34, token: 64, when: 84, job: 220, customer: 230, amount: 132, tech: 128, status: 212, actions: 236 },
-  tight: { sn: 30, token: 56, when: 78, job: 210, customer: 220, amount: 128, status: 190, actions: 228 },
+  full: { sn: 40, token: 112, when: 84, job: 240, customer: 210, where: 170, amount: 136, tech: 144, status: 228, actions: 244 },
+  compact: { sn: 40, token: 106, when: 84, job: 220, customer: 230, amount: 132, tech: 128, status: 212, actions: 236 },
+  tight: { sn: 40, token: 100, when: 78, job: 210, customer: 220, amount: 128, status: 190, actions: 228 },
 };
 /** The columns that may shrink a little to fit; every other one keeps its width. */
 const SHRINKS: ColKey[] = ['job', 'customer', 'where'];
@@ -62,7 +62,7 @@ export const HEAD_LABEL: Record<ColKey, string> = {
   sn: 'SN no.',
   /** Whatever number identifies this row - a job's token, a sale's bill no. - so it is one column
    * across every kind of row instead of "Token" sitting blank on rows that have no token. */
-  token: 'Tracking no.',
+  token: 'Trace no.',
   when: 'Date',
   job: 'Job',
   customer: 'Customer',

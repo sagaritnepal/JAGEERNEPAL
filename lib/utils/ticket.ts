@@ -10,3 +10,10 @@ export function ticketLabel(no: number | string | null | undefined): string | nu
   if (!Number.isFinite(n) || n <= 0) return null;
   return `#${String(n).padStart(4, '0')}`;
 }
+
+/** The ticket, spelled out for the Trace no. column: "Token no: 0042" instead of the bare "#0042"
+ * used everywhere else (job headings, chips, search). */
+export function tokenCellLabel(no: number | string | null | undefined): string {
+  const label = ticketLabel(no);
+  return label ? `Token no: ${label.slice(1)}` : '—';
+}
