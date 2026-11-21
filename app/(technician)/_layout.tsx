@@ -22,7 +22,6 @@ function navItems(isStaff: boolean, isSupervisor: boolean): WebNavItem[] {
     ...(isStaff ? [{ href: '/(technician)/worksheet', label: 'Worksheet', icon: 'clipboard' } as WebNavItem] : []),
     ...(isSupervisor ? [{ href: '/(technician)/workhub', label: 'Worksheet', icon: 'grid' } as WebNavItem] : []),
     { href: '/(technician)/jobs', label: 'My Jobs', icon: 'briefcase' },
-    { href: '/(technician)/rewards', label: 'Rewards', icon: 'star' },
     { href: '/(technician)/earnings', label: 'Earnings', icon: 'wallet' },
   ];
 }
@@ -97,14 +96,11 @@ export default function TechnicianLayout() {
         options={{ title: 'My Jobs', tabBarIcon: ({ color, focused }) => <TabIcon name="briefcase" color={color} focused={focused} /> }}
       />
       <Tabs.Screen
-        name="rewards"
-        options={{ title: 'Rewards', tabBarIcon: ({ color, focused }) => <TabIcon name="star" color={color} focused={focused} /> }}
-      />
-      <Tabs.Screen
         name="earnings"
         options={{ title: 'Earnings', tabBarIcon: ({ color, focused }) => <TabIcon name="wallet" color={color} focused={focused} /> }}
       />
       <Tabs.Screen name="profile" options={{ href: null, title: 'Profile' }} />
+      <Tabs.Screen name="rewards" options={{ href: null, title: 'Rewards' }} />
       <Tabs.Screen name="statement" options={{ href: null, title: 'Statement' }} />
       <Tabs.Screen name="job/[id]" options={{ href: null, title: 'Job Card' }} />
       <Tabs.Screen name="employment" options={{ href: null, title: 'Employment' }} />
