@@ -878,8 +878,9 @@ function SaleBillRow({
             <Ionicons name="receipt" size={wide ? 15 : 20} color="white" />
           </View>
         ),
-        title: hasBillNo ? `Sale · Bill #${sale.bill_no}` : 'Sale · no bill number yet',
+        title: hasBillNo ? 'Sale' : 'Sale · no bill number yet',
         who: sale.party_name ?? 'Customer',
+        token: hasBillNo ? `#${sale.bill_no!.trim()}` : null,
         progress: billingStages(billing),
         place: null,
         when: sale.bill_date ?? sale.created_at.slice(0, 10),

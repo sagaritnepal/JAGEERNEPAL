@@ -60,7 +60,9 @@ export function columnStyle(tier: Tier, key: ColKey, splitAssign?: boolean) {
 export const AMOUNT_PAD = 12;
 export const HEAD_LABEL: Record<ColKey, string> = {
   sn: 'SN no.',
-  token: 'Token no.',
+  /** Whatever number identifies this row - a job's token, a sale's bill no. - so it is one column
+   * across every kind of row instead of "Token" sitting blank on rows that have no token. */
+  token: 'Tracking no.',
   when: 'Date',
   job: 'Job',
   customer: 'Customer',
