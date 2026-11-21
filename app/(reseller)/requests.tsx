@@ -938,16 +938,11 @@ export default function ResellerRequestQueue() {
     orderBy: { column: 'created_at', ascending: true },
     enabled: !!userId,
   });
-  // Sale bills added straight to a customer, and every customer's ledger entries to tell which
-  // of them are settled: these read Completed -> Billed -> Paid too.
+  // Only read here to tell which jobs a bill already covers (billedJobs below) - the bills
+  // themselves, typed straight to a customer in Finance, stay out of this work pipeline.
   const { data: directSales } = useSupabaseQuery('business_transactions', {
     filters: userId ? { owner_id: userId, type: 'sale' } : {},
     orderBy: { column: 'created_at', ascending: false },
-    enabled: !!userId,
-  });
-  const { data: ledgerEntries } = useSupabaseQuery('customer_ledger_entries', {
-    filters: userId ? { owner_id: userId } : {},
-    all: true,
     enabled: !!userId,
   });
   const { data: allProducts } = useSupabaseQuery('products', {});
@@ -1012,24 +1007,10 @@ export default function ResellerRequestQueue() {
     (sellingOrders ?? []).forEach((order) =>
       groups.get(orderStageOf(order))!.push({ kind: 'order', id: order.id, order })
     );
-    // A customer owes while their debits outrun their credits.
-    const owed = new Map<string, number>();
-    (ledgerEntries ?? []).forEach((e) =>
-      owed.set(e.customer_id, (owed.get(e.customer_id) ?? 0) + (e.entry_type === 'debit' ? e.amount : -e.amount))
-    );
-    (directSales ?? []).forEach((sale) => {
-      // Only bills typed in by hand to a saved customer; ones a job or order wrote are already
-      // in the pipeline as that job or order.
-      if (sale.source_type || !sale.customer_id) return;
-      const billing: Billing = !sale.bill_no?.trim()
-        ? 'completed'
-        : (owed.get(sale.customer_id) ?? 0) > 0
-          ? 'billed'
-          : 'paid';
-      groups.get('completed')!.push({ kind: 'sale', id: sale.id, sale, billing });
-    });
+    // A bill typed straight into Finance (not raised from a job or order here) stays in Finance -
+    // My Requests is for the work pipeline, not a second copy of the ledger.
     return groups;
-  }, [incoming, mine, sellingOrders, directSales, ledgerEntries]);
+  }, [incoming, mine, sellingOrders, directSales]);
 
   const countOf = (stage: Stage) => myByStage.get(stage)?.length ?? 0;
   const activeStage = jobStage ?? STAGE_ORDER.find((stage) => countOf(stage) > 0) ?? 'requests';
