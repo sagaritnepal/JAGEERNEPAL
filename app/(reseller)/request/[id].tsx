@@ -37,7 +37,8 @@ import { assignTechnician, showJobSentAlert } from '../../../lib/utils/assignTec
 import { reopenCompletedJob, withdrawJobOffer, claimServiceRequest } from '../../../lib/hooks/useJobOffers';
 import { respondToJobHold } from '../../../lib/hooks/useJobHold';
 import { canCancelWork, useCancelWork } from '../../../lib/hooks/useCancelWork';
-import { canMarkJobDone, useMarkJobDone } from '../../../lib/hooks/useMarkJobDone';
+import { canMarkJobDone, useMarkJobDone, type StaffOption } from '../../../lib/hooks/useMarkJobDone';
+import { useMyEmployees } from '../../../lib/hooks/useTechnicianEmployment';
 import { distanceKm } from '../../../lib/utils/distance';
 import { jobAmountDue } from '../../../lib/utils/jobAmount';
 import type { ServiceRequest } from '../../../types/database.types';
@@ -324,6 +325,9 @@ function CancelWorkButton({ request }: { request: ServiceRequest }) {
 /** "Mark as done" for work that was finished but never completed in the app (a technician who does
  * not use it). Moves the job to Completed, ready to bill; asks "are you sure?" first. */
 function MarkDoneButton({ request }: { request: ServiceRequest }) {
+  const resellerId = useAuthStore((state) => state.session?.user.id);
+  const { data: employees } = useMyEmployees(resellerId);
+  const team: StaffOption[] = (employees ?? []).map(({ profile }) => ({ id: profile.id, name: profile.full_name }));
   const { confirmMarkDone, doingId, dialog } = useMarkJobDone();
   if (!canMarkJobDone(request)) return null;
   const busy = doingId === request.id;
@@ -335,7 +339,7 @@ function MarkDoneButton({ request }: { request: ServiceRequest }) {
         kind="green"
         height={42}
         disabled={busy}
-        onPress={() => confirmMarkDone(request)}
+        onPress={() => confirmMarkDone(request, team)}
       />
       {dialog}
     </>

@@ -2059,7 +2059,7 @@ export function WorkHubPanel({
         onAssign={assignFromList}
         onCancelWork={confirmCancelWork}
         onDeleteWork={confirmDeleteJob}
-        onMarkDone={confirmMarkDone}
+        onMarkDone={(r) => confirmMarkDone(r, staffChoices)}
         onOpenToTeam={setOpenToTeam}
         busyId={cancellingId ?? deletingId ?? doingId ?? busyId}
         wide={wide}
@@ -2103,7 +2103,7 @@ export function WorkHubPanel({
               }}
               onCancelWork={confirmCancelWork}
               onDeleteWork={confirmDeleteJob}
-              onMarkDone={confirmMarkDone}
+              onMarkDone={(r) => confirmMarkDone(r, staffChoices)}
               onOpenToTeam={setOpenToTeam}
               busyId={cancellingId ?? deletingId ?? doingId ?? busyId}
               wide={wide}

@@ -1,6 +1,7 @@
 // lib/hooks/useMarkJobDone.tsx
 import { useCallback, useState, type ReactNode } from 'react';
-import { Modal, Pressable, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../supabase';
 import { getErrorMessage, showAlert } from '../utils/alert';
@@ -10,6 +11,9 @@ import type { ServiceRequest } from '../../types/database.types';
 export type DoneableRequest = Pick<ServiceRequest, 'id' | 'issue_type' | 'status' | 'technician_id' | 'reseller_id' | 'origin'> & {
   ticket_no?: number | string | null;
 };
+
+/** Enough of an employee to list and fill the name from - the same people Assign picks from. */
+export type StaffOption = { id: string; name: string | null };
 
 /** True for a job the reseller can mark as done: one that is under way (approved, assigned or in
  * progress), or a walk-in job of their own that was never started. An app request still waiting for
@@ -24,14 +28,19 @@ export function canMarkJobDone(request: Pick<ServiceRequest, 'status' | 'reselle
 /** "Mark as done" for a reseller, on any screen: for work that was finished but never completed in the
  * app because the technician does not use it. A job with nobody assigned in the app has nothing on
  * record for who did it, so it first asks for that name (mark_job_done refuses without one - migration
- * 0111); a job already assigned to an app technician just gets the usual "Are you sure?". Either way it
- * completes the job on the server - it moves to Completed, ready to bill. The chalan is not asked for;
- * it can be added on the completed job. `doingId` is the job being marked, to disable its button.
+ * 0111) - picked from the reseller's own team if they have one, or typed in for someone without an
+ * account; a job already assigned to an app technician just gets the usual "Are you sure?". Either way
+ * it completes the job on the server - it moves to Completed, ready to bill. The chalan is not asked
+ * for; it can be added on the completed job. `doingId` is the job being marked, to disable its button.
  * Render `{dialog}` once on the screen, next to wherever `confirmMarkDone` is called from. */
-export function useMarkJobDone(): { confirmMarkDone: (request: DoneableRequest) => void; doingId: string | null; dialog: ReactNode } {
+export function useMarkJobDone(): {
+  confirmMarkDone: (request: DoneableRequest, team?: StaffOption[]) => void;
+  doingId: string | null;
+  dialog: ReactNode;
+} {
   const queryClient = useQueryClient();
   const [doingId, setDoingId] = useState<string | null>(null);
-  const [pending, setPending] = useState<DoneableRequest | null>(null);
+  const [pending, setPending] = useState<{ request: DoneableRequest; team: StaffOption[] } | null>(null);
   const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -59,11 +68,11 @@ export function useMarkJobDone(): { confirmMarkDone: (request: DoneableRequest) 
   );
 
   const confirmMarkDone = useCallback(
-    (request: DoneableRequest) => {
+    (request: DoneableRequest, team: StaffOption[] = []) => {
       // Nobody's on record for this one in the app - get a name before it can complete.
       if (!request.technician_id) {
         setName('');
-        setPending(request);
+        setPending({ request, team });
         return;
       }
       const heading = `${ticketLabel(request.ticket_no) ?? ''} ${request.issue_type}`.trim();
@@ -82,7 +91,7 @@ export function useMarkJobDone(): { confirmMarkDone: (request: DoneableRequest) 
   const submitName = () => {
     if (!pending || !name.trim() || saving) return;
     setSaving(true);
-    void finish(pending, name.trim());
+    void finish(pending.request, name.trim());
   };
 
   const dialog = pending ? (
@@ -91,15 +100,34 @@ export function useMarkJobDone(): { confirmMarkDone: (request: DoneableRequest) 
         <Pressable onPress={() => {}} className="w-full max-w-sm rounded-xl bg-white p-4">
           <Text className="text-base font-bold text-gray-900">Who did this job?</Text>
           <Text className="mt-1 text-xs text-gray-500">
-            {`${ticketLabel(pending.ticket_no) ?? ''} ${pending.issue_type}`.trim()} has nobody assigned in the app. Enter who
-            did the work before it can be marked as done.
+            {`${ticketLabel(pending.request.ticket_no) ?? ''} ${pending.request.issue_type}`.trim()} has nobody assigned in
+            the app. Pick from your team, or type who did the work, before it can be marked as done.
           </Text>
+          {pending.team.length > 0 && (
+            <ScrollView className="mt-3" style={{ maxHeight: 160 }}>
+              {pending.team.map((person) => (
+                <Pressable
+                  key={person.id}
+                  onPress={() => setName(person.name ?? '')}
+                  className={`flex-row items-center gap-2.5 rounded-lg px-2 py-2 ${name.trim() === (person.name ?? '').trim() && name.trim() ? 'bg-emerald-50' : ''}`}
+                >
+                  <View className="items-center justify-center rounded-full bg-blue-600" style={{ width: 28, height: 28 }}>
+                    <Text className="text-[11px] font-bold text-white">{(person.name ?? '?').trim().charAt(0).toUpperCase()}</Text>
+                  </View>
+                  <Text className="flex-1 text-sm font-medium text-gray-800" numberOfLines={1}>
+                    {person.name ?? 'Unnamed'}
+                  </Text>
+                  {name.trim() === (person.name ?? '').trim() && name.trim() && <Ionicons name="checkmark-circle" size={18} color="#059669" />}
+                </Pressable>
+              ))}
+            </ScrollView>
+          )}
           <TextInput
             value={name}
             onChangeText={setName}
             onSubmitEditing={submitName}
-            autoFocus
-            placeholder="Technician's name"
+            autoFocus={pending.team.length === 0}
+            placeholder={pending.team.length > 0 ? "Or type a name not on your team" : "Technician's name"}
             placeholderTextColor="#9CA3AF"
             editable={!saving}
             className="mt-3 rounded-lg border border-gray-300 px-3 py-2.5 text-sm text-gray-900"
