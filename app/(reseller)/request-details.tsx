@@ -361,8 +361,6 @@ function ResellerRequestDetails() {
   if (customerPhone.trim() && !isValidPhone10(customerPhone)) missing.push('valid phone number');
   const missingText = missing.join(', ').replace(/^./, (ch) => ch.toUpperCase());
 
-  const cardWidth = isWideWeb ? ('calc((100% - 16px) / 2)' as unknown as number) : undefined;
-
   // Tapping the Customer name box drops its matches right under it, instead of a separate popup -
   // picking one below fills name, phone and (for a saved customer) their location.
   const customerMatches = buildCustomerSuggestions(myCustomers ?? [], phoneContacts.contacts, customerName, undefined, true);
@@ -461,8 +459,8 @@ function ResellerRequestDetails() {
         )}
         <ServiceDropdown value={service} onChange={setService} />
 
-        <View style={{ flexDirection: isWideWeb ? 'row' : 'column', flexWrap: 'wrap', gap: isWideWeb ? 16 : 12 }}>
-          <NumberedCard n={1} title="Who is it for?" subtitle="Saved customer or phone contact" wide={isWideWeb} width={cardWidth}>
+        <View className={`rounded-2xl border border-gray-200 bg-white ${isWideWeb ? 'p-5' : 'p-4'}`}>
+          <FormSection title="Who is it for?" subtitle="Saved customer or phone contact" first>
             <FieldLabel required>Customer name</FieldLabel>
             <SuggestInput
               value={customerName}
@@ -512,37 +510,37 @@ function ResellerRequestDetails() {
               maxLength={10}
               className="rounded-lg border border-gray-300 bg-white px-4 py-3 text-base"
             />
+          </FormSection>
 
-            <View className="mt-3.5">
-              <FieldLabel required>Location</FieldLabel>
-              {isWideWeb ? (
-                <View className="flex-row gap-2.5">
-                  <TextInput
-                    value={address}
-                    onChangeText={setAddress}
-                    placeholder="House/street, city, area"
-                    className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-3 text-base"
-                  />
-                  {locationButton}
-                </View>
-              ) : (
-                <>
-                  {locationButton}
-                  <TextInput
-                    value={address}
-                    onChangeText={setAddress}
-                    placeholder="House/street, city, area"
-                    multiline
-                    className="mt-2.5 rounded-lg border border-gray-300 bg-white px-4 py-3 text-base"
-                    style={{ minHeight: 60, textAlignVertical: 'top' }}
-                  />
-                </>
-              )}
-              {coords && <View className="mt-2.5"><MapPreview coords={coords} height={140} /></View>}
-            </View>
-          </NumberedCard>
+          <FormSection title="Location" subtitle="Seen by the technician before accepting">
+            <FieldLabel required>Location</FieldLabel>
+            {isWideWeb ? (
+              <View className="flex-row gap-2.5">
+                <TextInput
+                  value={address}
+                  onChangeText={setAddress}
+                  placeholder="House/street, city, area"
+                  className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-3 text-base"
+                />
+                {locationButton}
+              </View>
+            ) : (
+              <>
+                {locationButton}
+                <TextInput
+                  value={address}
+                  onChangeText={setAddress}
+                  placeholder="House/street, city, area"
+                  multiline
+                  className="mt-2.5 rounded-lg border border-gray-300 bg-white px-4 py-3 text-base"
+                  style={{ minHeight: 60, textAlignVertical: 'top' }}
+                />
+              </>
+            )}
+            {coords && <View className="mt-2.5"><MapPreview coords={coords} height={140} /></View>}
+          </FormSection>
 
-          <NumberedCard n={2} title="When?" subtitle="Seen by the technician before accepting" wide={isWideWeb} width={cardWidth}>
+          <FormSection title="When?" subtitle="Seen by the technician before accepting">
             <View className="flex-row gap-2.5">
               <View className="flex-1">
                 <FieldLabel required>Date</FieldLabel>
@@ -553,15 +551,9 @@ function ResellerRequestDetails() {
                 <TimeField value={time} onChange={setTime} />
               </View>
             </View>
-          </NumberedCard>
+          </FormSection>
 
-          <NumberedCard
-            n={3}
-            title="Show the problem"
-            subtitle={`Optional — up to ${PHOTO_SLOTS} photos and notes help quoting`}
-            wide={isWideWeb}
-            width={cardWidth}
-          >
+          <FormSection title="Show the problem" subtitle={`Optional — up to ${PHOTO_SLOTS} photos and notes help quoting`}>
             {existingPhotos.length > 0 && (
               <View className="mb-3">
                 <Text className="mb-1.5 text-xs font-medium text-gray-500">Already on this job</Text>
@@ -580,9 +572,9 @@ function ResellerRequestDetails() {
               </>
             )}
             {photos.some(Boolean) && <Text className="mt-2 text-xs text-gray-400">Tap a photo to remove it.</Text>}
-          </NumberedCard>
+          </FormSection>
 
-          <NumberedCard n={4} title="Price" subtitle="Optional — leave blank to price it later" wide={isWideWeb} width={cardWidth}>
+          <FormSection title="Price" subtitle="Optional — leave blank to price it later">
             <View className="flex-row items-center gap-2 rounded-lg border border-gray-300 bg-white px-4">
               <Text className="text-base font-semibold text-gray-500">NPR</Text>
               <TextInput
@@ -597,7 +589,7 @@ function ResellerRequestDetails() {
               This is your own customer, so the price is yours to agree with them - you can assign a technician
               straight away.
             </Text>
-          </NumberedCard>
+          </FormSection>
         </View>
       </ScrollView>
 
@@ -680,31 +672,24 @@ function FieldLabel({ children, required }: { children: React.ReactNode; require
   );
 }
 
-function NumberedCard({
-  n,
+/** One labeled part of the single request sheet - a hairline above it separates it from the part
+ * before, except the first. */
+function FormSection({
   title,
   subtitle,
-  wide,
-  width,
+  first,
   children,
 }: {
-  n: number;
   title: string;
   subtitle: string;
-  wide: boolean;
-  width?: number;
+  first?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <View className={`rounded-2xl border border-gray-200 bg-white ${wide ? 'p-5' : 'p-4'}`} style={width ? { width } : undefined}>
-      <View className="mb-3.5 flex-row items-center gap-2.5">
-        <View className="h-[26px] w-[26px] items-center justify-center rounded-full bg-orange-50">
-          <Text className="text-[13px] font-bold text-orange-700">{n}</Text>
-        </View>
-        <View className="flex-1">
-          <Text className="text-base font-bold text-gray-900">{title}</Text>
-          <Text className="text-xs text-gray-400">{subtitle}</Text>
-        </View>
+    <View className={first ? '' : 'mt-5 border-t border-gray-100 pt-5'}>
+      <View className="mb-3.5">
+        <Text className="text-base font-bold text-gray-900">{title}</Text>
+        <Text className="text-xs text-gray-400">{subtitle}</Text>
       </View>
       {children}
     </View>
