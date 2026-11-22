@@ -1178,9 +1178,16 @@ function JobCompactRow({
         </Text>
       )}
 
-      <Text className="text-[12px] font-bold text-gray-800" style={{ width: w.token, flexShrink: 0 }} numberOfLines={1}>
-        {tokenCellLabel(r.ticket_no)}
-      </Text>
+      <View style={{ width: w.token, flexShrink: 0, gap: 1 }}>
+        <Text className="text-[12px] font-bold text-gray-800" numberOfLines={1}>
+          {tokenCellLabel(r.ticket_no)}
+        </Text>
+        {!!r.chalan_no?.trim() && (
+          <Text className="text-[10.5px] text-gray-500" numberOfLines={1}>
+            {`Chalan no. ${r.chalan_no.trim()}${r.chalan_urls.length > 0 ? ' · photo' : ''}`}
+          </Text>
+        )}
+      </View>
 
       {has('when') && (
         <View style={{ width: w.when, flexShrink: 0 }}>
@@ -1205,11 +1212,6 @@ function JobCompactRow({
           {!!customerRequest && (
             <Text className="text-[11px] text-gray-600" numberOfLines={2}>
               {customerRequest}
-            </Text>
-          )}
-          {!!r.chalan_no?.trim() && (
-            <Text className="text-[11px] font-semibold text-gray-600" numberOfLines={1}>
-              {`Chalan no. ${r.chalan_no.trim()}${r.chalan_urls.length > 0 ? ' · photo added' : ''}`}
             </Text>
           )}
         </View>
