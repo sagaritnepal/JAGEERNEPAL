@@ -681,53 +681,63 @@ function JobCard({ id }: { id: string }) {
                 hint: `NPR ${Number(p.price).toLocaleString()}`,
                 sub: p.stock_level > 0 ? `${p.stock_level} in stock` : 'Out of stock',
               }));
+              // Same shape as a Sale bill's item line: name on its own row (icon + name + remove),
+              // then qty x rate = amount, right-aligned - amount is computed, never typed directly.
+              const amount = (Number(part.quantity) || 0) * (Number(part.cost) || 0);
               return (
                 <View
                   key={index}
-                  className="mb-2 rounded-xl border border-gray-200 bg-gray-50 p-2"
+                  className="mb-2 rounded-lg border border-gray-200 bg-white px-2.5 py-2"
                   style={{ zIndex: activePartIndex === index ? 10 : 0 }}
                 >
-                  <View className="flex-row items-center gap-2">
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <SuggestInput
-                        value={part.name}
-                        onChangeText={(v) => updatePart(index, 'name', v)}
-                        onFocus={() => setActivePartIndex(index)}
-                        onBlur={() => setTimeout(() => setActivePartIndex((cur) => (cur === index ? null : cur)), 150)}
-                        options={options}
-                        onSelectOption={(o) => {
-                          const match = matches.find((p) => p.id === o.key);
-                          if (match) pickProduct(index, match);
-                          else updatePart(index, 'name', o.label);
-                        }}
-                        placeholder="Part or product name"
-                        inputClassName="rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900"
-                        accent="#2563EB"
-                        compact
-                      />
+                  <View className="mb-1.5 flex-row items-start justify-between gap-2">
+                    <View className="flex-1 flex-row items-start gap-1.5 pr-1">
+                      <Ionicons name="cube-outline" size={13} color="#9CA3AF" style={{ marginTop: 6 }} />
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <SuggestInput
+                          value={part.name}
+                          onChangeText={(v) => updatePart(index, 'name', v)}
+                          onFocus={() => setActivePartIndex(index)}
+                          onBlur={() => setTimeout(() => setActivePartIndex((cur) => (cur === index ? null : cur)), 150)}
+                          options={options}
+                          onSelectOption={(o) => {
+                            const match = matches.find((p) => p.id === o.key);
+                            if (match) pickProduct(index, match);
+                            else updatePart(index, 'name', o.label);
+                          }}
+                          placeholder="Part or product name"
+                          inputClassName="text-sm font-semibold text-gray-900"
+                          accent="#2563EB"
+                          compact
+                        />
+                      </View>
                     </View>
-                    <Pressable onPress={() => removePart(index)} hitSlop={6} className="h-9 w-9 items-center justify-center rounded-lg">
-                      <Ionicons name="close-circle" size={20} color="#D1D5DB" />
+                    <Pressable onPress={() => removePart(index)} hitSlop={8}>
+                      <Ionicons name="close-circle" size={16} color="#D1D5DB" />
                     </Pressable>
                   </View>
-                  <View className="mt-2 flex-row items-center gap-2">
+                  <View className="flex-row items-center justify-end gap-1.5">
                     <TextInput
                       value={part.quantity}
                       onChangeText={(v) => updatePart(index, 'quantity', digitsInput(v))}
-                      placeholder="Qty"
                       keyboardType="numeric"
-                      className="w-16 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900"
+                      placeholder="Qty"
+                      placeholderTextColor="#9CA3AF"
+                      className="w-12 rounded border border-gray-200 py-1 text-center text-xs text-gray-900"
                     />
-                    <View className="flex-1 flex-row items-center rounded-lg border border-gray-300 bg-white px-3">
-                      <Text className="text-sm font-medium text-gray-400">NPR</Text>
-                      <TextInput
-                        value={part.cost}
-                        onChangeText={(v) => updatePart(index, 'cost', decimalInput(v))}
-                        placeholder="Cost"
-                        keyboardType="numeric"
-                        className="flex-1 py-2.5 pl-2 text-sm text-gray-900"
-                      />
-                    </View>
+                    <Text className="text-[10px] text-gray-400">×</Text>
+                    <TextInput
+                      value={part.cost}
+                      onChangeText={(v) => updatePart(index, 'cost', decimalInput(v))}
+                      keyboardType="numeric"
+                      placeholder="Rate"
+                      placeholderTextColor="#9CA3AF"
+                      className="w-16 rounded border border-gray-200 py-1 text-center text-xs text-gray-900"
+                    />
+                    <Text className="text-[10px] text-gray-400">=</Text>
+                    <Text className="text-right text-xs font-bold text-gray-900" numberOfLines={1}>
+                      NPR {amount.toLocaleString()}
+                    </Text>
                   </View>
                 </View>
               );
@@ -920,6 +930,7 @@ function JobCard({ id }: { id: string }) {
             {statusCard}
             {holdRequested}
             {onHold}
+            {chalan}
             {partsAndLabor}
             {extras}
             {remark}
@@ -928,7 +939,6 @@ function JobCard({ id }: { id: string }) {
             {resellerContact}
             {customerContact}
             {lockedNote}
-            {chalan}
             {acceptReject}
             {advance}
             {holdButton}
