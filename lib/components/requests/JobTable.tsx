@@ -64,7 +64,7 @@ export const HEAD_LABEL: Record<ColKey, string> = {
    * across every kind of row instead of "Token" sitting blank on rows that have no token. */
   token: 'Tracking no.',
   when: 'Date',
-  job: 'Job',
+  job: 'Job Description',
   customer: 'Customer',
   where: 'Address',
   amount: 'Amount',

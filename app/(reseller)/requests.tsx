@@ -305,14 +305,14 @@ function ChalanLink({ chalan, size }: { chalan: NonNullable<JobRowData['chalan']
       onPress={chalan.onOpen}
       hitSlop={4}
       accessibilityRole="button"
-      accessibilityLabel={added ? 'View the chalan' : 'Add the chalan number'}
+      accessibilityLabel={added ? 'Edit the chalan' : 'Add the chalan number'}
       className="flex-row items-center self-start"
       style={{ gap: 4, maxWidth: '100%' }}
     >
       <Text className="font-semibold" style={{ fontSize: size, color: added ? '#374151' : '#0F766E', flexShrink: 1 }} numberOfLines={1}>
         {text}
       </Text>
-      <Ionicons name={added ? 'eye-outline' : 'create-outline'} size={size + 1} color={added ? '#0F766E' : '#6B7280'} />
+      <Ionicons name="create-outline" size={size + 1} color={added ? '#0F766E' : '#6B7280'} />
     </Pressable>
   );
 }
@@ -443,11 +443,9 @@ function JobRowView({ data, stage, wide }: { data: JobRowData; stage: Stage; wid
         <Pressable onPress={data.open} className="flex-row items-center" style={{ gap: 8, width: w.job, flexShrink: 1, ...cell }}>
           {data.icon}
           <View style={{ flex: 1, gap: 1, ...cell }}>
-            <Text className="text-[13px] font-bold text-gray-900" numberOfLines={1}>
-              {data.title}
-            </Text>
+            <Text className="text-[13px] font-bold text-gray-900">{data.title}</Text>
             {data.lines?.map((line) => (
-              <Text key={line} className="text-[11px] text-gray-600" numberOfLines={1}>
+              <Text key={line} className="text-[11px] text-gray-600">
                 {line}
               </Text>
             ))}
