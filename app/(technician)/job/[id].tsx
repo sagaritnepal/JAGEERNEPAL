@@ -563,15 +563,15 @@ function JobCard({ id }: { id: string }) {
     <>
       {hasAccepted && (
         <View className="mb-4 rounded-2xl border border-gray-200 bg-white">
-          <View className="flex-row items-center gap-2.5 px-5 pt-5" style={{ paddingBottom: request.status === 'in_progress' ? 16 : 20 }}>
-            <View className="h-9 w-9 items-center justify-center rounded-full bg-blue-50">
-              <Ionicons name="document-attach-outline" size={18} color="#2563EB" />
+          <View className="flex-row items-center gap-2.5 px-4 pb-3 pt-4">
+            <View className="h-8 w-8 items-center justify-center rounded-full bg-blue-50">
+              <Ionicons name="document-attach-outline" size={16} color="#2563EB" />
             </View>
             <Text className="text-base font-bold text-gray-900">Chalan</Text>
           </View>
-          <View className="px-5 pb-5">
+          <View className="px-4 pb-4">
             {request.status === 'in_progress' && (
-              <View className="mb-4">
+              <View className="mb-3">
                 <Text className="mb-1.5 text-sm font-semibold text-gray-700">
                   Chalan number <Text className="text-red-500">*</Text>
                 </Text>
@@ -581,7 +581,7 @@ function JobCard({ id }: { id: string }) {
                   onBlur={saveChalanNo}
                   placeholder="Number written on the chalan"
                   placeholderTextColor="#9CA3AF"
-                  className="rounded-lg border border-gray-300 px-3.5 py-3 text-sm text-gray-900"
+                  className="rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900"
                 />
                 <Text className="mt-1.5 text-xs leading-[17px] text-gray-500">
                   Add the chalan number and a photo of the slip below - the job can't be marked complete without both.
@@ -605,16 +605,13 @@ function JobCard({ id }: { id: string }) {
     <>
       {request.status === 'in_progress' && (
         <View className="mb-4 rounded-2xl border border-gray-200 bg-white" style={{ zIndex: activePartIndex != null ? 50 : 1 }}>
-          <View className="flex-row items-center gap-2.5 px-5 pb-4 pt-5">
-            <View className="h-9 w-9 items-center justify-center rounded-full bg-blue-50">
-              <Ionicons name="construct-outline" size={18} color="#2563EB" />
+          <View className="flex-row items-center gap-2.5 px-4 pb-3 pt-4">
+            <View className="h-8 w-8 items-center justify-center rounded-full bg-blue-50">
+              <Ionicons name="construct-outline" size={16} color="#2563EB" />
             </View>
-            <View className="flex-1">
-              <Text className="text-base font-bold text-gray-900">Parts &amp; labor</Text>
-              <Text className="text-xs text-gray-400">For the job record - optional</Text>
-            </View>
+            <Text className="text-base font-bold text-gray-900">Parts &amp; labor</Text>
           </View>
-          <View className="px-5 pb-5">
+          <View className="px-4 pb-4">
             {request.quoted_price != null && Number(request.quoted_price) > 0 && (
               <Text className="mb-3 text-xs leading-[17px] text-gray-500">
                 The customer pays the agreed price of NPR {Number(request.quoted_price).toLocaleString()}. Record parts
@@ -633,7 +630,7 @@ function JobCard({ id }: { id: string }) {
               return (
                 <View
                   key={index}
-                  className="mb-2.5 rounded-xl border border-gray-200 bg-gray-50 p-2.5"
+                  className="mb-2 rounded-xl border border-gray-200 bg-gray-50 p-2"
                   style={{ zIndex: activePartIndex === index ? 10 : 0 }}
                 >
                   <View className="flex-row items-center gap-2">
@@ -649,7 +646,6 @@ function JobCard({ id }: { id: string }) {
                           if (match) pickProduct(index, match);
                           else updatePart(index, 'name', o.label);
                         }}
-                        showWhenEmpty
                         placeholder="Part or product name"
                         inputClassName="rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900"
                         accent="#2563EB"
@@ -872,12 +868,12 @@ function JobCard({ id }: { id: string }) {
             {onHold}
             {extras}
             {remark}
-            {chalan}
           </View>
           <View style={{ flex: 2, minWidth: 0 }}>
             {resellerContact}
             {lockedNote}
             {partsAndLabor}
+            {chalan}
             {acceptReject}
             {advance}
             {holdButton}
