@@ -56,6 +56,9 @@ type BookRow = {
   sub: string | null;
   /** The bill's own number (its invoice / bill no.); null for anything that is not a bill. */
   invoiceNo: string | null;
+  /** The free-text remark typed on a sale/purchase bill, on its own - unlike `sub`, never combined
+   * with "Bill #..." (see the Remark / Invoice column). */
+  remark: string | null;
   discount: number | null;
   /** Bill total (sale/purchase) or amount moved (transfer) - not cash. */
   amount: number | null;
@@ -172,6 +175,20 @@ function TypePill({ kind }: { kind: Kind }) {
   );
 }
 
+/** One fact in a sale row's expanded strip - a small label over its value. */
+function DayBookFact({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={{ gap: 1, minWidth: 0 }}>
+      <Text className="text-[10px] font-bold uppercase text-gray-400" style={{ letterSpacing: 0.4 }}>
+        {label}
+      </Text>
+      <Text className="text-[12.5px] font-semibold text-gray-800" numberOfLines={1}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
 /** Which account an entry went through - Cash, eSewa, a bank... */
 function AccountPill({ row }: { row: BookRow }) {
   if (!row.account) return null;
@@ -207,6 +224,34 @@ function DayBookTable({ rows, opening, totalIn, totalOut, closing, full, dayLabe
   onOpenRow: (row: BookRow) => void;
 }) {
   const [calendarMode] = useCalendarMode();
+  // A sale bill's row opens a strip of detail right under it instead of leaving the page - a second
+  // tap on the same row closes it again. Several can be open at once.
+  const [expandedSale, setExpandedSale] = useState<Set<string>>(new Set());
+  const toggleSale = (r: BookRow) =>
+    setExpandedSale((prev) => {
+      const next = new Set(prev);
+      if (next.has(r.id)) next.delete(r.id);
+      else next.add(r.id);
+      return next;
+    });
+  const rowPress = (r: BookRow) => (r.kind === 'sale' ? toggleSale(r) : onOpenRow(r));
+  const saleDetail = (r: BookRow) => {
+    if (r.kind !== 'sale' || !expandedSale.has(r.id)) return null;
+    return (
+      <View className="border-b border-gray-200 bg-gray-50 px-3 py-2.5" style={{ gap: 8 }}>
+        <View className="flex-row flex-wrap" style={{ columnGap: 20, rowGap: 6 }}>
+          <DayBookFact label="Invoice no." value={r.invoiceNo || '—'} />
+          {!!r.discount && <DayBookFact label="Discount" value={money(r.discount)} />}
+        </View>
+        {!!r.bill && (
+          <Pressable onPress={() => onOpenRow(r)} hitSlop={6} className="flex-row items-center self-start" style={{ gap: 4 }}>
+            <Text className="text-[12px] font-bold text-blue-600">View full bill</Text>
+            <Ionicons name="arrow-forward" size={12} color="#2563EB" />
+          </Pressable>
+        )}
+      </View>
+    );
+  };
   // The newest entry comes first and the opening line last; the running Balance still builds up from the opening, so
   // each row shows the balance after it. SN stays the entry's place in time (the first of the period is 1).
   const entries = rows.filter((r) => r.kind !== 'opening');
@@ -271,18 +316,21 @@ function DayBookTable({ rows, opening, totalIn, totalOut, closing, full, dayLabe
         { key: 'sn', label: 'SN', width: COL.sn, render: (r) => snCell(r) },
         { key: 'date', label: 'Date', width: COL.date, render: (r) => dateCell(r, false) },
         {
-          // The bill's own number - not an amount; anything that is not a bill has none.
+          // A sale bill shows its remark here instead - not an amount; anything that is not a bill,
+          // or a sale bill with neither, has none.
           key: 'invoice',
-          label: 'Invoice no.',
+          label: 'Remark / Invoice',
           width: COL.invoice,
-          render: (r) =>
-            r.invoiceNo ? (
+          render: (r) => {
+            const text = r.kind === 'sale' ? r.remark : r.invoiceNo;
+            return text ? (
               <Text className="text-[12.5px] font-semibold text-gray-700" numberOfLines={1}>
-                {r.invoiceNo}
+                {text}
               </Text>
             ) : (
               <Text className="text-[12.5px] text-gray-400">—</Text>
-            ),
+            );
+          },
         },
         { key: 'details', label: 'Transaction details', render: (r) => detailsCell(r, false) },
         {
@@ -347,8 +395,10 @@ function DayBookTable({ rows, opening, totalIn, totalOut, closing, full, dayLabe
       columns={columns}
       rows={shownRows}
       rowKey={(r) => r.id}
-      // Tapping an entry opens it for editing; the opening-balance line and anything without a record behind it stays inert.
-      onRowPress={onOpenRow}
+      // Tapping an entry opens it for editing; a sale bill instead opens its detail strip in place
+      // (see rowPress). The opening-balance line and anything without a record behind it stays inert.
+      onRowPress={rowPress}
+      expanded={saleDetail}
       rowPressable={(r) => !!(r.edit || r.bill || r.journal)}
       highlight={(r) => r.kind === 'opening'}
       // A date band above each day's entries, when the view spans more than one day (the opening line has none).
@@ -865,7 +915,7 @@ export function DayBookScreen({ basePath }: { basePath: string }) {
     const categoryName = new Map((categories ?? []).map((c) => [c.id, c.name]));
     const via = (bankId: string | null) => (bankId ? (accountName.get(bankId) ?? 'Other account') : 'Cash');
     const keyOf = (bankId: string | null): AccountKey => bankId ?? CASH;
-    const blank = { invoiceNo: null, discount: null, amount: null, cashIn: null, cashOut: null, balance: null, purchasePrice: null, account: null, moves: [] as Move[] };
+    const blank = { invoiceNo: null, remark: null, discount: null, amount: null, cashIn: null, cashOut: null, balance: null, purchasePrice: null, account: null, moves: [] as Move[] };
     // A vehicle account: each vehicle's purchase price - its purchase bill's rate (the latest bill), else its stock
     // item's cost price - looked up by the vehicle an entry names (a bill's item, a payment's remark).
     const vehicleKey = (name: string | null | undefined) => (name ?? '').split(' · ')[0].trim().replace(/\s+/g, ' ').toLowerCase();
@@ -928,6 +978,9 @@ export function DayBookScreen({ basePath }: { basePath: string }) {
             .join(' · ') || null,
         // The bill's own number - what the Invoice column shows (an expense has none).
         invoiceNo: isExpense ? null : t.bill_no?.trim() || null,
+        // The plain remark, kept apart from `sub`'s "Bill #X · remark" - what the Sale bill rows show
+        // in place of the invoice number (see the Remark / Invoice column).
+        remark: isExpense ? null : t.note?.trim() || null,
         discount,
         // An expense is paid on the spot, so it's cash out; a sale or
         // purchase bill is a debt until its payment is recorded.
