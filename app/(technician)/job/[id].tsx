@@ -17,10 +17,10 @@ import { ChalanPhotos } from '../../../lib/components/ChalanPhotos';
 import { HoldRequestModal } from '../../../lib/components/HoldRequestModal';
 import { showAlert, getErrorMessage } from '../../../lib/utils/alert';
 import { PaymentStatusSheet, PaymentChip, jobTotal, money as npr } from '../../../lib/components/PaymentStatusSheet';
-import { SuggestInput, type SuggestOption } from '../../../lib/components/finance/SuggestInput';
+import { BillItemsTable, type BillItemRow } from '../../../lib/components/finance/BillItemsTable';
 import { formatDuration, formatTimestamp } from '../../../lib/utils/duration';
-import { decimalInput, digitsInput } from '../../../lib/utils/number';
-import type { Product, RequestStatus } from '../../../types/database.types';
+import { decimalInput } from '../../../lib/utils/number';
+import type { RequestStatus } from '../../../types/database.types';
 
 // Ticks once a minute - jobs run from minutes to days, so second-level
 // precision would just cause unnecessary re-renders for no visible benefit.
@@ -131,9 +131,6 @@ function JobCard({ id }: { id: string }) {
   // turned typing 500 into "0500".
   const [parts, setParts] = useState<PartRow[]>([{ name: '', quantity: '1', cost: '' }]);
   const [laborCost, setLaborCost] = useState('');
-  // Raises the open row's (and the whole card's) z-index while its product dropdown is open, so the
-  // list draws over the rows, Add part and Labor cost below it instead of the two overlapping.
-  const [activePartIndex, setActivePartIndex] = useState<number | null>(null);
   // The number on the chalan slip: with its photo, it is needed before the job can be marked complete.
   const [chalanNo, setChalanNo] = useState('');
   const [answering, setAnswering] = useState<'accept' | 'reject' | 'reopen' | null>(null);
@@ -186,14 +183,11 @@ function JobCard({ id }: { id: string }) {
 
   const nextStatus = NEXT_STATUS[request.status];
 
-  function updatePart(index: number, field: keyof PartRow, value: string) {
-    setParts((prev) => prev.map((p, i) => (i === index ? { ...p, [field]: value } : p)));
-  }
-
-  // Picking a real product fills its price too, so the two stay in sync instead of a name typed
-  // blind next to a cost guessed at.
-  function pickProduct(index: number, product: Product) {
-    setParts((prev) => prev.map((p, i) => (i === index ? { ...p, name: product.name, cost: String(product.price) } : p)));
+  // BillItemsTable (the same table a Sale bill uses) works in its own row shape - description/qty/rate -
+  // so parts/BillItemRow are translated at the boundary; what's saved on the job card stays
+  // name/quantity/cost, unchanged for every job already recorded this way.
+  function updateBillRow(index: number, row: BillItemRow) {
+    setParts((prev) => prev.map((p, i) => (i === index ? { name: row.description, quantity: row.qty, cost: row.rate } : p)));
   }
 
   function addPart() {
@@ -655,101 +649,39 @@ function JobCard({ id }: { id: string }) {
     </>
   );
 
+  const billItems: BillItemRow[] = parts.map((p) => ({ description: p.name, qty: p.quantity, rate: p.cost }));
+
   const partsAndLabor = (
     <>
       {request.status === 'in_progress' && (
-        <View className="mb-4 rounded-2xl border border-gray-200 bg-white" style={{ zIndex: activePartIndex != null ? 50 : 1 }}>
-          <View className="flex-row items-center gap-2.5 px-4 pb-3 pt-4">
-            <View className="h-8 w-8 items-center justify-center rounded-full bg-blue-50">
-              <Ionicons name="construct-outline" size={16} color="#2563EB" />
-            </View>
-            <Text className="text-base font-bold text-gray-900">Parts &amp; labor</Text>
-          </View>
-          <View className="px-4 pb-4">
-            {request.quoted_price != null && Number(request.quoted_price) > 0 && (
-              <Text className="mb-3 text-xs leading-[17px] text-gray-500">
-                The customer pays the agreed price of NPR {Number(request.quoted_price).toLocaleString()}. Record parts
-                and labor here for the job record - if the job needs more, ask the reseller before going ahead.
-              </Text>
-            )}
-            {parts.map((part, index) => {
-              const q = part.name.trim().toLowerCase();
-              const matches = (resellerProducts ?? []).filter((p) => !q || p.name.toLowerCase().includes(q));
-              const options: SuggestOption[] = matches.map((p) => ({
-                key: p.id,
-                label: p.name,
-                hint: `NPR ${Number(p.price).toLocaleString()}`,
-                sub: p.stock_level > 0 ? `${p.stock_level} in stock` : 'Out of stock',
-              }));
-              // Same shape as a Sale bill's item line: name on its own row (icon + name + remove),
-              // then qty x rate = amount, right-aligned - amount is computed, never typed directly.
-              const amount = (Number(part.quantity) || 0) * (Number(part.cost) || 0);
-              return (
-                <View
-                  key={index}
-                  className="mb-2 rounded-lg border border-gray-200 bg-white px-2.5 py-2"
-                  style={{ zIndex: activePartIndex === index ? 10 : 0 }}
-                >
-                  <View className="mb-1.5 flex-row items-start justify-between gap-2">
-                    <View className="flex-1 flex-row items-start gap-1.5 pr-1">
-                      <Ionicons name="cube-outline" size={13} color="#9CA3AF" style={{ marginTop: 6 }} />
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <SuggestInput
-                          value={part.name}
-                          onChangeText={(v) => updatePart(index, 'name', v)}
-                          onFocus={() => setActivePartIndex(index)}
-                          onBlur={() => setTimeout(() => setActivePartIndex((cur) => (cur === index ? null : cur)), 150)}
-                          options={options}
-                          onSelectOption={(o) => {
-                            const match = matches.find((p) => p.id === o.key);
-                            if (match) pickProduct(index, match);
-                            else updatePart(index, 'name', o.label);
-                          }}
-                          placeholder="Part or product name"
-                          inputClassName="text-sm font-semibold text-gray-900"
-                          accent="#2563EB"
-                          compact
-                        />
-                      </View>
-                    </View>
-                    <Pressable onPress={() => removePart(index)} hitSlop={8}>
-                      <Ionicons name="close-circle" size={16} color="#D1D5DB" />
-                    </Pressable>
-                  </View>
-                  <View className="flex-row items-center justify-end gap-1.5">
-                    <TextInput
-                      value={part.quantity}
-                      onChangeText={(v) => updatePart(index, 'quantity', digitsInput(v))}
-                      keyboardType="numeric"
-                      placeholder="Qty"
-                      placeholderTextColor="#9CA3AF"
-                      className="w-12 rounded border border-gray-200 py-1 text-center text-xs text-gray-900"
-                    />
-                    <Text className="text-[10px] text-gray-400">×</Text>
-                    <TextInput
-                      value={part.cost}
-                      onChangeText={(v) => updatePart(index, 'cost', decimalInput(v))}
-                      keyboardType="numeric"
-                      placeholder="Rate"
-                      placeholderTextColor="#9CA3AF"
-                      className="w-16 rounded border border-gray-200 py-1 text-center text-xs text-gray-900"
-                    />
-                    <Text className="text-[10px] text-gray-400">=</Text>
-                    <Text className="text-right text-xs font-bold text-gray-900" numberOfLines={1}>
-                      NPR {amount.toLocaleString()}
-                    </Text>
-                  </View>
-                </View>
-              );
-            })}
-            <Pressable
-              onPress={addPart}
-              className="mb-5 flex-row items-center justify-center gap-1.5 rounded-lg border border-dashed border-blue-300 bg-blue-50 py-2.5"
-            >
-              <Ionicons name="add-circle-outline" size={16} color="#2563EB" />
-              <Text className="text-sm font-bold text-blue-700">Add part</Text>
-            </Pressable>
+        <View className="mb-4" style={{ gap: 12 }}>
+          {request.quoted_price != null && Number(request.quoted_price) > 0 && (
+            <Text className="text-xs leading-[17px] text-gray-500">
+              The customer pays the agreed price of NPR {Number(request.quoted_price).toLocaleString()}. Record parts
+              and labor here for the job record - if the job needs more, ask the reseller before going ahead.
+            </Text>
+          )}
+          {/* The exact same table a Sale bill's Items section uses, reading from the reseller's own
+              stock - picking a row fills its price too, instead of typed blind next to a guessed cost. */}
+          <BillItemsTable
+            items={billItems}
+            products={resellerProducts ?? []}
+            financeItems={[]}
+            accent="#2563EB"
+            onUpdate={(index, row) => updateBillRow(index, row)}
+            onRemove={removePart}
+            onRequestSave={() => {}}
+            onExit={() => {}}
+          />
+          <Pressable
+            onPress={addPart}
+            className="flex-row items-center justify-center gap-1.5 rounded-lg border border-dashed border-blue-300 bg-blue-50 py-2.5"
+          >
+            <Ionicons name="add-circle-outline" size={16} color="#2563EB" />
+            <Text className="text-sm font-bold text-blue-700">Add part</Text>
+          </Pressable>
 
+          <View className="rounded-2xl border border-gray-200 bg-white p-4">
             <Text className="mb-1.5 text-sm font-semibold text-gray-700">Labor cost</Text>
             <View className="flex-row items-center rounded-lg border border-gray-300 bg-white px-3.5">
               <Text className="text-sm font-medium text-gray-400">NPR</Text>
@@ -925,7 +857,6 @@ function JobCard({ id }: { id: string }) {
         <View className="flex-row items-start" style={{ gap: 20 }}>
           <View style={{ flex: 3, minWidth: 0 }}>
             {heading}
-            {stageStrip}
             {paymentChip}
             {statusCard}
             {holdRequested}
@@ -936,6 +867,7 @@ function JobCard({ id }: { id: string }) {
             {remark}
           </View>
           <View style={{ flex: 2, minWidth: 0 }}>
+            {stageStrip}
             {resellerContact}
             {customerContact}
             {lockedNote}
