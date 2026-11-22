@@ -616,25 +616,24 @@ function JobCard({ id }: { id: string }) {
               <Ionicons name="document-attach-outline" size={16} color="#2563EB" />
             </View>
             <Text className="text-base font-bold text-gray-900">Chalan</Text>
-          </View>
-          <View className="px-4 pb-4">
             {request.status === 'in_progress' && (
-              <View className="mb-3">
-                <Text className="mb-1.5 text-sm font-semibold text-gray-700">
-                  Chalan number <Text className="text-red-500">*</Text>
-                </Text>
+              <View className="ml-auto flex-1 flex-row items-center justify-end" style={{ gap: 8, maxWidth: 180 }}>
                 <TextInput
                   value={chalanNo}
                   onChangeText={setChalanNo}
                   onBlur={saveChalanNo}
-                  placeholder="Number written on the chalan"
+                  placeholder="Chalan no. *"
                   placeholderTextColor="#9CA3AF"
-                  className="rounded-lg border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900"
+                  className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
                 />
-                <Text className="mt-1.5 text-xs leading-[17px] text-gray-500">
-                  Add the chalan number and a photo of the slip below - the job can't be marked complete without both.
-                </Text>
               </View>
+            )}
+          </View>
+          <View className="px-4 pb-4">
+            {request.status === 'in_progress' && (
+              <Text className="mb-3 text-xs leading-[17px] text-gray-500">
+                Add the chalan number and a photo of the slip below - the job can't be marked complete without both.
+              </Text>
             )}
             <ChalanPhotos
               chalanUrls={request.chalan_urls}
@@ -650,6 +649,39 @@ function JobCard({ id }: { id: string }) {
   );
 
   const billItems: BillItemRow[] = parts.map((p) => ({ description: p.name, qty: p.quantity, rate: p.cost }));
+
+  // Sits inside the Items table's own card, as its own section below the rows - the same shape the
+  // Sale bill form uses for Services under Items, just the one fixed labor line instead of a named list.
+  const laborFooter = (
+    <View className="border-t border-gray-200">
+      <View className="flex-row items-center border-y border-gray-200 bg-gray-50 px-2 py-2">
+        <Text className="flex-1 px-2.5 text-[11px] font-bold capitalize tracking-wider text-gray-500">
+          Labor cost (optional)
+        </Text>
+        <Text className="text-right text-[11px] font-bold capitalize tracking-wider text-gray-500" style={{ width: 130 }}>
+          Amount
+        </Text>
+        <View style={{ width: 36 }} />
+      </View>
+      <View className="flex-row items-center px-2 py-1.5">
+        <View style={{ flex: 1 }} />
+        <View style={{ width: 130 }}>
+          <TextInput
+            value={laborCost}
+            onChangeText={(v) => setLaborCost(decimalInput(v))}
+            placeholder="0"
+            placeholderTextColor="#B2B8C1"
+            keyboardType="numeric"
+            selectTextOnFocus
+            accessibilityLabel="Labor cost"
+            className="rounded-lg px-2.5 py-2.5 text-right text-sm font-semibold text-gray-900"
+            style={{ borderWidth: 1.5, borderColor: '#F1F2F4', outlineStyle: 'none' } as object}
+          />
+        </View>
+        <View style={{ width: 36 }} />
+      </View>
+    </View>
+  );
 
   const partsAndLabor = (
     <>
@@ -672,6 +704,7 @@ function JobCard({ id }: { id: string }) {
             onRemove={removePart}
             onRequestSave={() => {}}
             onExit={() => {}}
+            footer={laborFooter}
           />
           <Pressable
             onPress={addPart}
@@ -680,20 +713,6 @@ function JobCard({ id }: { id: string }) {
             <Ionicons name="add-circle-outline" size={16} color="#2563EB" />
             <Text className="text-sm font-bold text-blue-700">Add part</Text>
           </Pressable>
-
-          <View className="rounded-2xl border border-gray-200 bg-white p-4">
-            <Text className="mb-1.5 text-sm font-semibold text-gray-700">Labor cost</Text>
-            <View className="flex-row items-center rounded-lg border border-gray-300 bg-white px-3.5">
-              <Text className="text-sm font-medium text-gray-400">NPR</Text>
-              <TextInput
-                value={laborCost}
-                onChangeText={(v) => setLaborCost(decimalInput(v))}
-                placeholder="0"
-                keyboardType="numeric"
-                className="flex-1 py-3 pl-2 text-sm text-gray-900"
-              />
-            </View>
-          </View>
         </View>
       )}
     </>
@@ -861,9 +880,9 @@ function JobCard({ id }: { id: string }) {
             {statusCard}
             {holdRequested}
             {onHold}
+            {extras}
             {chalan}
             {partsAndLabor}
-            {extras}
             {remark}
           </View>
           <View style={{ flex: 2, minWidth: 0 }}>
