@@ -1029,15 +1029,54 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
   // a way to still open the bill in full.
   const billDetailPanel = (e: Entry) => {
     if (kind !== 'sale' || !expandedBills.has(e.id)) return null;
+    const items = e.tx?.items ?? [];
     return (
       <View className="border-b border-gray-200 bg-gray-50 px-4 py-3" style={{ gap: 10 }}>
         <View className="flex-row flex-wrap" style={{ columnGap: 24, rowGap: 8 }}>
           <DetailFact label="Bill No." value={e.billNo || '—'} />
-          {!showItem && <DetailFact label="Item" value={e.itemNames || '—'} />}
-          {!showModel && <DetailFact label="Model" value={e.modelNames || '—'} />}
           <DetailFact label="Ledger type" value={e.ledgerType || '—'} />
           <DetailFact label="Date" value={toBsHistoryLabel(e.date.slice(0, 10))} />
         </View>
+        {items.length > 0 ? (
+          <View className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+            <View className="flex-row px-3 py-1.5" style={{ columnGap: 8 }}>
+              <Text className="flex-1 text-[10px] font-bold uppercase text-gray-500" style={{ letterSpacing: 0.4 }}>
+                Product
+              </Text>
+              <Text className="w-12 text-right text-[10px] font-bold uppercase text-gray-500" style={{ letterSpacing: 0.4 }}>
+                Qty
+              </Text>
+              <Text className="w-20 text-right text-[10px] font-bold uppercase text-gray-500" style={{ letterSpacing: 0.4 }}>
+                Rate
+              </Text>
+              <Text className="w-24 text-right text-[10px] font-bold uppercase text-gray-500" style={{ letterSpacing: 0.4 }}>
+                Amount
+              </Text>
+            </View>
+            {items.map((it, i) => (
+              <View
+                key={i}
+                className={`flex-row items-center border-t border-gray-100 px-3 py-1.5`}
+                style={{ columnGap: 8 }}
+              >
+                <Text className="flex-1 text-[12.5px] text-gray-800" numberOfLines={1}>
+                  {it.description || 'Item'}
+                </Text>
+                <Text className="w-12 text-right text-[12.5px] text-gray-600">{it.qty}</Text>
+                <Text className="w-20 text-right text-[12.5px] text-gray-600">{money(it.rate)}</Text>
+                <Text className="w-24 text-right text-[12.5px] font-semibold text-gray-900">{money(it.amount)}</Text>
+              </View>
+            ))}
+            <View className="flex-row items-center border-t border-gray-200 px-3 py-1.5" style={{ columnGap: 8 }}>
+              <Text className="flex-1 text-[12.5px] font-bold text-gray-900">Total</Text>
+              <Text className="w-24 text-right text-[12.5px] font-bold text-gray-900" style={{ marginLeft: 'auto' }}>
+                {money(items.reduce((sum, it) => sum + Number(it.amount), 0))}
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <Text className="text-[12.5px] text-gray-500">No products listed on this bill.</Text>
+        )}
         {!!e.tx && (
           <Pressable onPress={() => setViewingTx(e.tx!)} hitSlop={6} className="flex-row items-center self-start" style={{ gap: 4 }}>
             <Text className="text-[12px] font-bold text-blue-600">View full bill</Text>
