@@ -17,9 +17,10 @@ import { ChalanPhotos } from '../../../lib/components/ChalanPhotos';
 import { HoldRequestModal } from '../../../lib/components/HoldRequestModal';
 import { showAlert, getErrorMessage } from '../../../lib/utils/alert';
 import { PaymentStatusSheet, PaymentChip, jobTotal, money as npr } from '../../../lib/components/PaymentStatusSheet';
+import { SuggestInput, type SuggestOption } from '../../../lib/components/finance/SuggestInput';
 import { formatDuration, formatTimestamp } from '../../../lib/utils/duration';
 import { decimalInput, digitsInput } from '../../../lib/utils/number';
-import type { RequestStatus } from '../../../types/database.types';
+import type { Product, RequestStatus } from '../../../types/database.types';
 
 // Ticks once a minute - jobs run from minutes to days, so second-level
 // precision would just cause unnecessary re-renders for no visible benefit.
@@ -111,6 +112,12 @@ function JobCard({ id }: { id: string }) {
     enabled: !!id,
   });
   const jobCard = jobCards?.[0] ?? null;
+  // The reseller's own product catalog, so a part typed here can be picked from real stock (name and
+  // price together) instead of typed blind and never matching what Finance later bills against.
+  const { data: resellerProducts } = useSupabaseQuery('products', {
+    filters: request?.reseller_id ? { seller_id: request.reseller_id, seller_role: 'reseller' } : {},
+    enabled: !!request?.reseller_id,
+  });
   const hasAccepted = !!request && request.status !== 'assigned';
   const { data: customer } = useSupabaseRow('profiles', hasAccepted ? request?.client_id : undefined);
   const { data: reseller } = useSupabaseRow('profiles', hasAccepted ? request?.reseller_id ?? undefined : undefined);
@@ -177,6 +184,12 @@ function JobCard({ id }: { id: string }) {
 
   function updatePart(index: number, field: keyof PartRow, value: string) {
     setParts((prev) => prev.map((p, i) => (i === index ? { ...p, [field]: value } : p)));
+  }
+
+  // Picking a real product fills its price too, so the two stay in sync instead of a name typed
+  // blind next to a cost guessed at.
+  function pickProduct(index: number, product: Product) {
+    setParts((prev) => prev.map((p, i) => (i === index ? { ...p, name: product.name, cost: String(product.price) } : p)));
   }
 
   function addPart() {
@@ -550,30 +563,40 @@ function JobCard({ id }: { id: string }) {
   const chalan = (
     <>
       {hasAccepted && (
-        <View className="mb-6 rounded-xl bg-white p-5">
-          {request.status === 'in_progress' && (
-            <View className="mb-4">
-              <Text className="mb-1.5 text-sm font-semibold text-gray-900">Chalan number *</Text>
-              <TextInput
-                value={chalanNo}
-                onChangeText={setChalanNo}
-                onBlur={saveChalanNo}
-                placeholder="Number written on the chalan"
-                placeholderTextColor="#9CA3AF"
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-              <Text className="mt-1.5 text-xs text-gray-500">
-                Add the chalan number and a photo of the slip below - the job can't be marked complete without both.
-              </Text>
+        <View className="mb-6 overflow-hidden rounded-2xl border border-gray-200 bg-white">
+          <View className="flex-row items-center gap-2.5 px-5 pt-5" style={{ paddingBottom: request.status === 'in_progress' ? 16 : 20 }}>
+            <View className="h-9 w-9 items-center justify-center rounded-full bg-blue-50">
+              <Ionicons name="document-attach-outline" size={18} color="#2563EB" />
             </View>
-          )}
-          <ChalanPhotos
-            chalanUrls={request.chalan_urls}
-            requestId={request.id}
-            userId={userId}
-            editable
-            onUploaded={(urls) => updateRequest.mutateAsync({ id: request.id, values: { chalan_urls: urls } })}
-          />
+            <Text className="text-base font-bold text-gray-900">Chalan</Text>
+          </View>
+          <View className="px-5 pb-5">
+            {request.status === 'in_progress' && (
+              <View className="mb-4">
+                <Text className="mb-1.5 text-sm font-semibold text-gray-700">
+                  Chalan number <Text className="text-red-500">*</Text>
+                </Text>
+                <TextInput
+                  value={chalanNo}
+                  onChangeText={setChalanNo}
+                  onBlur={saveChalanNo}
+                  placeholder="Number written on the chalan"
+                  placeholderTextColor="#9CA3AF"
+                  className="rounded-lg border border-gray-300 px-3.5 py-3 text-sm text-gray-900"
+                />
+                <Text className="mt-1.5 text-xs leading-[17px] text-gray-500">
+                  Add the chalan number and a photo of the slip below - the job can't be marked complete without both.
+                </Text>
+              </View>
+            )}
+            <ChalanPhotos
+              chalanUrls={request.chalan_urls}
+              requestId={request.id}
+              userId={userId}
+              editable
+              onUploaded={(urls) => updateRequest.mutateAsync({ id: request.id, values: { chalan_urls: urls } })}
+            />
+          </View>
         </View>
       )}
     </>
@@ -582,53 +605,98 @@ function JobCard({ id }: { id: string }) {
   const partsAndLabor = (
     <>
       {request.status === 'in_progress' && (
-        <View className="mb-6 rounded-xl bg-white p-5">
-          {request.quoted_price != null && Number(request.quoted_price) > 0 && (
-            <Text className="mb-3 text-xs leading-[17px] text-gray-500">
-              The customer pays the agreed price of NPR {Number(request.quoted_price).toLocaleString()}. Record parts
-              and labor here for the job record - if the job needs more, ask the reseller before going ahead.
-            </Text>
-          )}
-          <Text className="mb-3 text-sm font-semibold text-gray-900">Parts used</Text>
-          {parts.map((part, index) => (
-            <View key={index} className="mb-2 flex-row items-center gap-2">
-              <TextInput
-                value={part.name}
-                onChangeText={(v) => updatePart(index, 'name', v)}
-                placeholder="Part name"
-                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-              <TextInput
-                value={part.quantity}
-                onChangeText={(v) => updatePart(index, 'quantity', digitsInput(v))}
-                placeholder="Qty"
-                keyboardType="numeric"
-                className="w-16 rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-              <TextInput
-                value={part.cost}
-                onChangeText={(v) => updatePart(index, 'cost', decimalInput(v))}
-                placeholder="Cost"
-                keyboardType="numeric"
-                className="w-20 rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-              <Pressable onPress={() => removePart(index)} className="items-center justify-center px-2 py-2">
-                <Text className="text-red-600">✕</Text>
-              </Pressable>
+        <View className="mb-6 overflow-hidden rounded-2xl border border-gray-200 bg-white">
+          <View className="flex-row items-center gap-2.5 px-5 pb-4 pt-5">
+            <View className="h-9 w-9 items-center justify-center rounded-full bg-blue-50">
+              <Ionicons name="construct-outline" size={18} color="#2563EB" />
             </View>
-          ))}
-          <Pressable onPress={addPart} className="mb-4 self-start">
-            <Text className="text-sm font-semibold text-orange-600">+ Add part</Text>
-          </Pressable>
+            <View className="flex-1">
+              <Text className="text-base font-bold text-gray-900">Parts &amp; labor</Text>
+              <Text className="text-xs text-gray-400">For the job record - optional</Text>
+            </View>
+          </View>
+          <View className="px-5 pb-5">
+            {request.quoted_price != null && Number(request.quoted_price) > 0 && (
+              <Text className="mb-3 text-xs leading-[17px] text-gray-500">
+                The customer pays the agreed price of NPR {Number(request.quoted_price).toLocaleString()}. Record parts
+                and labor here for the job record - if the job needs more, ask the reseller before going ahead.
+              </Text>
+            )}
+            {parts.map((part, index) => {
+              const q = part.name.trim().toLowerCase();
+              const matches = (resellerProducts ?? []).filter((p) => !q || p.name.toLowerCase().includes(q));
+              const options: SuggestOption[] = matches.map((p) => ({
+                key: p.id,
+                label: p.name,
+                hint: `NPR ${Number(p.price).toLocaleString()}`,
+                sub: p.stock_level > 0 ? `${p.stock_level} in stock` : 'Out of stock',
+              }));
+              return (
+                <View key={index} className="mb-2.5 rounded-xl border border-gray-200 bg-gray-50 p-2.5">
+                  <View className="flex-row items-center gap-2">
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <SuggestInput
+                        value={part.name}
+                        onChangeText={(v) => updatePart(index, 'name', v)}
+                        options={options}
+                        onSelectOption={(o) => {
+                          const match = matches.find((p) => p.id === o.key);
+                          if (match) pickProduct(index, match);
+                          else updatePart(index, 'name', o.label);
+                        }}
+                        showWhenEmpty
+                        placeholder="Part or product name"
+                        inputClassName="rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900"
+                        accent="#2563EB"
+                        compact
+                      />
+                    </View>
+                    <Pressable onPress={() => removePart(index)} hitSlop={6} className="h-9 w-9 items-center justify-center rounded-lg">
+                      <Ionicons name="close-circle" size={20} color="#D1D5DB" />
+                    </Pressable>
+                  </View>
+                  <View className="mt-2 flex-row items-center gap-2">
+                    <TextInput
+                      value={part.quantity}
+                      onChangeText={(v) => updatePart(index, 'quantity', digitsInput(v))}
+                      placeholder="Qty"
+                      keyboardType="numeric"
+                      className="w-16 rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-900"
+                    />
+                    <View className="flex-1 flex-row items-center rounded-lg border border-gray-300 bg-white px-3">
+                      <Text className="text-sm font-medium text-gray-400">NPR</Text>
+                      <TextInput
+                        value={part.cost}
+                        onChangeText={(v) => updatePart(index, 'cost', decimalInput(v))}
+                        placeholder="Cost"
+                        keyboardType="numeric"
+                        className="flex-1 py-2.5 pl-2 text-sm text-gray-900"
+                      />
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
+            <Pressable
+              onPress={addPart}
+              className="mb-5 flex-row items-center justify-center gap-1.5 rounded-lg border border-dashed border-blue-300 bg-blue-50 py-2.5"
+            >
+              <Ionicons name="add-circle-outline" size={16} color="#2563EB" />
+              <Text className="text-sm font-bold text-blue-700">Add part</Text>
+            </Pressable>
 
-          <Text className="mb-1 text-sm font-semibold text-gray-900">Labor cost (NPR)</Text>
-          <TextInput
-            value={laborCost}
-            onChangeText={(v) => setLaborCost(decimalInput(v))}
-            placeholder="0"
-            keyboardType="numeric"
-            className="rounded-lg border border-gray-300 px-3 py-2 text-sm"
-          />
+            <Text className="mb-1.5 text-sm font-semibold text-gray-700">Labor cost</Text>
+            <View className="flex-row items-center rounded-lg border border-gray-300 bg-white px-3.5">
+              <Text className="text-sm font-medium text-gray-400">NPR</Text>
+              <TextInput
+                value={laborCost}
+                onChangeText={(v) => setLaborCost(decimalInput(v))}
+                placeholder="0"
+                keyboardType="numeric"
+                className="flex-1 py-3 pl-2 text-sm text-gray-900"
+              />
+            </View>
+          </View>
         </View>
       )}
     </>
@@ -667,9 +735,11 @@ function JobCard({ id }: { id: string }) {
         <Pressable
           onPress={handleAdvance}
           disabled={isSaving}
-          className="mb-4 items-center rounded-lg bg-orange-500 py-3 disabled:opacity-50"
+          className="mb-3 h-14 flex-row items-center justify-center gap-2 rounded-2xl disabled:opacity-50"
+          style={{ backgroundColor: '#2563EB' }}
         >
-          <Text className="text-base font-semibold text-white">
+          {!isSaving && <Ionicons name="checkmark-circle" size={20} color="#fff" />}
+          <Text className="text-base font-bold text-white">
             {isSaving ? 'Updating…' : STATUS_ACTION_LABEL[request.status]}
           </Text>
         </Pressable>
@@ -682,7 +752,7 @@ function JobCard({ id }: { id: string }) {
       {request.status === 'in_progress' && request.hold_status === 'none' && (
         <Pressable
           onPress={() => setShowHoldModal(true)}
-          className="mb-4 flex-row items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white py-3"
+          className="mb-4 h-12 flex-row items-center justify-center gap-2 rounded-2xl border border-amber-300 bg-amber-50"
         >
           <Ionicons name="pause-circle-outline" size={18} color="#92400E" />
           <Text className="text-base font-semibold text-amber-900">Hold</Text>
