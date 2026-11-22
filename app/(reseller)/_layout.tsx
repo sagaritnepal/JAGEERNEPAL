@@ -51,15 +51,6 @@ const REPORT_FAMILY: WebNavItem[] = [
   { href: '/(reseller)/ageing-report', label: 'Ageing Report', icon: 'time' },
 ];
 
-// Every entry form lives under Day Book in the side panel (Expenses are charged through a Voucher).
-const DAYBOOK_ENTRIES: WebNavItem[] = [
-  ...financeShortcuts('/(reseller)')
-    .filter((s) => DAYBOOK_ENTRY_KEYS.has(s.key) && s.key !== 'expenses')
-    .map((s) => ({ href: s.href, label: s.label, icon: s.icon })),
-  { href: '/(reseller)/voucher', label: 'Voucher', icon: 'document-text' },
-  { href: '/(reseller)/contra', label: 'Contra', icon: 'swap-horizontal' },
-];
-
 const NAV_ITEMS: WebNavItem[] = [
   { href: '/(reseller)/company-dashboard', label: 'Dashboard', icon: 'grid' },
   { href: '/(reseller)/dashboard', label: 'Marketplace', icon: 'bag' },
@@ -74,11 +65,9 @@ const NAV_ITEMS: WebNavItem[] = [
       .filter((s) => !DAYBOOK_ENTRY_KEYS.has(s.key) && !STANDALONE_KEYS.has(s.key))
       .sort((a, b) => financeNavRank(a.key) - financeNavRank(b.key))
       .map((s) =>
-        s.key === 'report'
-          ? { href: s.href, label: s.label, icon: s.icon, children: REPORT_FAMILY }
-          : s.key === 'daybook'
-            ? { href: s.href, label: s.label, icon: s.icon, children: DAYBOOK_ENTRIES }
-            : { href: s.href, label: s.label, icon: s.icon }
+        // Day Book's own entry types (Payment In, Sales, Voucher, ...) are picked from its "What are
+        // you recording?" menu once you're on the page, not duplicated as a side panel dropdown too.
+        s.key === 'report' ? { href: s.href, label: s.label, icon: s.icon, children: REPORT_FAMILY } : { href: s.href, label: s.label, icon: s.icon }
       ),
   },
 ];
