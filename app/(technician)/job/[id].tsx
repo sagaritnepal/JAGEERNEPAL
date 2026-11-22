@@ -13,12 +13,13 @@ import { useSupabaseRow, useSupabaseUpdate, useSupabaseInsert, useSupabaseQuery 
 import { RequestDetailsExtras } from '../../../lib/components/RequestDetailsExtras';
 import { PersonAvatar } from '../../../lib/components/PersonAvatar';
 import { CategoryBadge } from '../../../lib/components/CategoryBadge';
-import { ChalanPhotos } from '../../../lib/components/ChalanPhotos';
+import { ChalanThumbnails, useChalanUpload } from '../../../lib/components/ChalanPhotos';
 import { HoldRequestModal } from '../../../lib/components/HoldRequestModal';
 import { showAlert, getErrorMessage } from '../../../lib/utils/alert';
 import { PaymentStatusSheet, PaymentChip, jobTotal, money as npr } from '../../../lib/components/PaymentStatusSheet';
 import { BillItemsTable, type BillItemRow } from '../../../lib/components/finance/BillItemsTable';
 import { formatDuration, formatTimestamp } from '../../../lib/utils/duration';
+import { formatScheduledWhen } from '../../../lib/utils/scheduledTime';
 import { decimalInput } from '../../../lib/utils/number';
 import type { RequestStatus } from '../../../types/database.types';
 
@@ -145,6 +146,15 @@ function JobCard({ id }: { id: string }) {
   useEffect(() => {
     setChalanNo(request?.chalan_no ?? '');
   }, [request?.chalan_no]);
+
+  // Lifted out of ChalanPhotos so the Chalan card can put its own button on the same line as the
+  // number field - the upload flow (camera/gallery, resize, save) is unchanged either way.
+  const chalanUpload = useChalanUpload({
+    chalanUrls: request?.chalan_urls ?? [],
+    requestId: request?.id ?? '',
+    userId,
+    onUploaded: (urls) => updateRequest.mutateAsync({ id: (request as { id: string }).id, values: { chalan_urls: urls } }),
+  });
 
   // Start the form from what's already on the job card, so re-completing a
   // reopened job doesn't overwrite the recorded parts and labor with blanks.
@@ -353,10 +363,57 @@ function JobCard({ id }: { id: string }) {
     </>
   );
 
+  // The Appointment card folded into Progress - the schedule and where to go matter from the moment
+  // the job is accepted, not just while it's in progress, so this part of the footer isn't gated on
+  // status the way the accepted/elapsed block below it is.
+  const hasSchedule = !!(request.scheduled_date || request.scheduled_time);
+  const hasLocation = !!(
+    request.location_data?.address ||
+    (request.location_data?.latitude != null && request.location_data?.longitude != null)
+  );
+  const appointmentRows = hasAccepted && (hasSchedule || hasLocation) && (
+    <View style={{ gap: 8 }}>
+      {hasSchedule && (
+        <View className="flex-row items-center gap-2.5">
+          <View className="h-7 w-7 items-center justify-center rounded-full bg-gray-100">
+            <Ionicons name="time-outline" size={14} color="#6B7280" />
+          </View>
+          <Text className="flex-1 text-sm font-semibold text-gray-900">
+            {formatScheduledWhen(request.scheduled_date, request.scheduled_time)}
+          </Text>
+        </View>
+      )}
+      {hasLocation && (
+        <View className="flex-row items-start gap-2.5">
+          <View className="h-7 w-7 items-center justify-center rounded-full bg-gray-100">
+            <Ionicons name="location-outline" size={14} color="#6B7280" />
+          </View>
+          <View className="flex-1">
+            {!!request.location_data?.address && (
+              <Text className="text-sm text-gray-700">{request.location_data.address}</Text>
+            )}
+            {request.location_data?.latitude != null && request.location_data?.longitude != null && (
+              <Pressable
+                onPress={() =>
+                  Linking.openURL(`https://www.google.com/maps?q=${request.location_data!.latitude},${request.location_data!.longitude}`)
+                }
+                className="mt-1.5 flex-row items-center self-start"
+                style={{ gap: 4 }}
+              >
+                <Text className="text-xs font-bold text-blue-600">View on Google Maps</Text>
+                <Ionicons name="arrow-forward" size={11} color="#2563EB" />
+              </Pressable>
+            )}
+          </View>
+        </View>
+      )}
+    </View>
+  );
+
   // In progress has nothing to add beyond "Work in progress", which the strip above already says -
   // so its one real fact (when it was accepted, and how long ago) sits right in the strip's own
   // footer instead of a second card underneath repeating the stage name.
-  const progressFooter =
+  const acceptedInfo =
     request.status === 'in_progress' && jobCard?.started_at ? (
       <>
         <View className="flex-row items-center justify-between rounded-lg bg-blue-50 px-3 py-2.5">
@@ -373,6 +430,15 @@ function JobCard({ id }: { id: string }) {
             Quoted price: NPR {Number(request.quoted_price).toLocaleString()}
           </Text>
         )}
+      </>
+    ) : undefined;
+
+  const progressFooter =
+    appointmentRows || acceptedInfo ? (
+      <>
+        {appointmentRows}
+        {!!appointmentRows && !!acceptedInfo && <View className="my-3 border-t border-gray-100" />}
+        {acceptedInfo}
       </>
     ) : undefined;
 
@@ -556,6 +622,7 @@ function JobCard({ id }: { id: string }) {
         contactPersonName={hasAccepted ? request.contact_person_name : undefined}
         contactPersonPhone={hasAccepted ? request.contact_person_phone : undefined}
         hideCustomer
+        hideAppointment
       />
     </>
   );
@@ -610,39 +677,40 @@ function JobCard({ id }: { id: string }) {
   const chalan = (
     <>
       {hasAccepted && (
-        <View className="mb-4 rounded-2xl border border-gray-200 bg-white">
-          <View className="flex-row items-center gap-2.5 px-4 pb-3 pt-4">
+        <View className="mb-4 rounded-2xl border border-gray-200 bg-white p-4">
+          <View className="flex-row items-center" style={{ gap: 10 }}>
             <View className="h-8 w-8 items-center justify-center rounded-full bg-blue-50">
               <Ionicons name="document-attach-outline" size={16} color="#2563EB" />
             </View>
             <Text className="text-base font-bold text-gray-900">Chalan</Text>
-            {request.status === 'in_progress' && (
-              <View className="ml-auto flex-1 flex-row items-center justify-end" style={{ gap: 8, maxWidth: 180 }}>
-                <TextInput
-                  value={chalanNo}
-                  onChangeText={setChalanNo}
-                  onBlur={saveChalanNo}
-                  placeholder="Chalan no. *"
-                  placeholderTextColor="#9CA3AF"
-                  className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
-                />
-              </View>
+            {request.status === 'in_progress' ? (
+              <TextInput
+                value={chalanNo}
+                onChangeText={setChalanNo}
+                onBlur={saveChalanNo}
+                placeholder="Chalan no. *"
+                placeholderTextColor="#9CA3AF"
+                className="ml-1 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900"
+              />
+            ) : (
+              <View className="flex-1" />
             )}
-          </View>
-          <View className="px-4 pb-4">
-            {request.status === 'in_progress' && (
-              <Text className="mb-3 text-xs leading-[17px] text-gray-500">
-                Add the chalan number and a photo of the slip below - the job can't be marked complete without both.
+            <Pressable
+              onPress={chalanUpload.handleAdd}
+              disabled={chalanUpload.uploading}
+              className="flex-row items-center gap-1.5 rounded-lg border border-blue-600 bg-blue-50 px-3 py-2 disabled:opacity-50"
+            >
+              <Ionicons name={chalanUpload.uploading ? 'hourglass-outline' : 'camera-outline'} size={15} color="#2563EB" />
+              <Text className="text-xs font-semibold text-blue-700">
+                {chalanUpload.uploading ? 'Uploading…' : request.chalan_urls.length > 0 ? 'Add another' : 'Add Chalan'}
               </Text>
-            )}
-            <ChalanPhotos
-              chalanUrls={request.chalan_urls}
-              requestId={request.id}
-              userId={userId}
-              editable
-              onUploaded={(urls) => updateRequest.mutateAsync({ id: request.id, values: { chalan_urls: urls } })}
-            />
+            </Pressable>
           </View>
+          {request.chalan_urls.length > 0 && (
+            <View className="mt-3">
+              <ChalanThumbnails chalanUrls={request.chalan_urls} />
+            </View>
+          )}
         </View>
       )}
     </>

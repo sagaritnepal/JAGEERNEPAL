@@ -55,6 +55,7 @@ export function RequestDetailsExtras({
   contactPersonPhone,
   companyName,
   hideCustomer,
+  hideAppointment,
 }: {
   scheduledDate: string | null;
   scheduledTime: string | null;
@@ -69,12 +70,15 @@ export function RequestDetailsExtras({
   /** Leaves the Customer block out - for a caller that shows it elsewhere on the page instead (see
    * the technician's Job Card, which puts it beside the Reseller card). */
   hideCustomer?: boolean;
+  /** Leaves the Schedule/Location block out - for a caller that shows it elsewhere instead (see the
+   * technician's Job Card, which folds it into the Progress card). */
+  hideAppointment?: boolean;
 }) {
   const hasSchedule = !!(scheduledDate || scheduledTime);
   const hasLocation = !!(location?.address || (location?.latitude != null && location?.longitude != null));
   const showCustomer = !hideCustomer && !!(customerName || customerPhone);
   const showContactPerson = !!contactPersonName && contactPersonName.trim() !== (customerName ?? '').trim();
-  const showAppointment = hasSchedule || hasLocation;
+  const showAppointment = !hideAppointment && (hasSchedule || hasLocation);
   const showPhotos = photoUrls.length > 0;
 
   if (!showAppointment && !showCustomer && !showPhotos) return null;
