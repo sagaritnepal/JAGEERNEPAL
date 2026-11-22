@@ -20,7 +20,6 @@ import { CategoryBadge } from '../../lib/components/CategoryBadge';
 import { RequestPhotos } from '../../lib/components/RequestDetailsExtras';
 import { ticketLabel } from '../../lib/utils/ticket';
 import { DateField, TimeField } from '../../lib/components/DateTimeFields';
-import { ToggleSwitch } from '../../lib/components/ToggleSwitch';
 import { WEB_SIDEBAR_MIN_WIDTH } from '../../lib/components/web/WebSidebarShell';
 import { LocationPickerModal, type Coords } from '../../lib/components/LocationPickerModal';
 import { MapPreview } from '../../lib/components/MapPreview';
@@ -29,7 +28,8 @@ import { resizeImageForUpload } from '../../lib/utils/resizeImage';
 import { returnPathOr } from '../../lib/utils/returnPath';
 import { ServiceDropdown } from '../../lib/components/ServiceDropdown';
 import { usePhoneContacts } from '../../lib/hooks/usePhoneContacts';
-import { ContactPickerModal } from '../../lib/components/ContactPickerModal';
+import { SuggestInput, type SuggestOption } from '../../lib/components/finance/SuggestInput';
+import { buildCustomerSuggestions } from '../../lib/utils/customerSuggestions';
 import { isValidPhone10 } from '../../lib/utils/phone';
 import { isPastDate } from '../../lib/utils/localDate';
 import { parseAmount, digitsInput } from '../../lib/utils/number';
@@ -86,7 +86,6 @@ function ResellerRequestDetails() {
   const phoneContacts = usePhoneContacts();
 
   const [customerId, setCustomerId] = useState<string | null>(null);
-  const [showNameSuggestions, setShowNameSuggestions] = useState(false);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [companyName, setCompanyName] = useState('');
@@ -173,41 +172,6 @@ function ResellerRequestDetails() {
       showAlert('Could not register customer', getErrorMessage(err));
     } finally {
       setRegisteringCustomer(false);
-    }
-  }
-
-  // The confirm popup's "Add customer" already told the reseller this person is saved, so it has
-  // to actually be saved now - same as every other picker in the app (see DayBookScreen.tsx). An
-  // address typed there only fills this job's own Location if that's still empty; it doesn't
-  // overwrite a location already picked.
-  async function handleSelectNew(answer: { name: string; phone: string | null; partyTypeId: string | null; address: string | null }) {
-    setShowNameSuggestions(false);
-    setCustomerName(answer.name);
-    if (answer.phone) setCustomerPhone(answer.phone);
-    if (answer.address && !address.trim() && !coords) setAddress(answer.address);
-    if (!userId) {
-      setCustomerId(null);
-      return;
-    }
-    const existing = answer.phone ? (myCustomers ?? []).find((c) => c.phone === answer.phone) : undefined;
-    if (existing) {
-      setCustomerId(existing.id);
-      return;
-    }
-    try {
-      const created = await createCustomer.mutateAsync({
-        owner_id: userId,
-        name: answer.name,
-        phone: answer.phone,
-        address: answer.address,
-        ...(answer.partyTypeId ? { party_type_id: answer.partyTypeId } : {}),
-      });
-      setCustomerId(created.id);
-    } catch (err) {
-      // Not saved after all (most likely a duplicate-phone conflict) - the amber "New customer"
-      // banner still offers Register Now, and submitting the request saves it either way.
-      setCustomerId(null);
-      showAlert('Could not save this customer yet', getErrorMessage(err));
     }
   }
 
@@ -399,6 +363,27 @@ function ResellerRequestDetails() {
 
   const cardWidth = isWideWeb ? ('calc((100% - 16px) / 2)' as unknown as number) : undefined;
 
+  // Tapping the Customer name box drops its matches right under it, instead of a separate popup -
+  // picking one below fills name, phone and (for a saved customer) their location.
+  const customerMatches = buildCustomerSuggestions(myCustomers ?? [], phoneContacts.contacts, customerName, undefined, true);
+  const customerOptions: SuggestOption[] = customerMatches.map((s) => ({
+    key: s.key,
+    label: s.name,
+    sub: s.phone,
+    hint: s.customer ? undefined : 'Contact',
+  }));
+  function pickCustomerOption(option: SuggestOption) {
+    const match = customerMatches.find((s) => s.key === option.key);
+    if (match?.customer) {
+      handleSelectCustomer(match.customer);
+      return;
+    }
+    // A phone contact, not a saved customer yet - the amber banner below offers Register now.
+    setCustomerName(match?.name ?? option.label);
+    setCustomerPhone(match?.phone ?? '');
+    setCustomerId(null);
+  }
+
   function cancel() {
     router.replace(returnPath);
   }
@@ -479,37 +464,33 @@ function ResellerRequestDetails() {
         <View style={{ flexDirection: isWideWeb ? 'row' : 'column', flexWrap: 'wrap', gap: isWideWeb ? 16 : 12 }}>
           <NumberedCard n={1} title="Who is it for?" subtitle="Saved customer or phone contact" wide={isWideWeb} width={cardWidth}>
             <FieldLabel required>Customer name</FieldLabel>
-            <Pressable
-              onPress={() => {
-                phoneContacts.request();
-                setShowNameSuggestions(true);
+            <SuggestInput
+              value={customerName}
+              onChangeText={(v) => {
+                setCustomerName(v);
+                setCustomerId(null);
               }}
-              className="mb-2.5 flex-row items-center gap-2.5 rounded-lg border border-gray-300 bg-white px-3"
-              style={{ minHeight: 48 }}
-            >
-              {customerName ? (
-                <View className="h-[30px] w-[30px] items-center justify-center rounded-full bg-orange-100">
-                  <Text className="text-xs font-bold text-orange-700">{initialsOf(customerName)}</Text>
-                </View>
-              ) : null}
-              <Text
-                className={`flex-1 text-base ${customerName ? 'font-semibold text-gray-900' : 'text-gray-400'}`}
-                numberOfLines={1}
-              >
-                {customerName || 'Who is this request for?'}
-              </Text>
-              {!!customerId && (
-                <View className="rounded-full bg-emerald-50 px-2 py-0.5">
-                  <Text className="text-[11px] font-semibold text-emerald-600">Saved customer</Text>
-                </View>
-              )}
-              <Ionicons name="chevron-down" size={16} color="#9CA3AF" />
-            </Pressable>
+              onFocus={() => phoneContacts.request()}
+              options={customerOptions}
+              onSelectOption={pickCustomerOption}
+              showWhenEmpty
+              placeholder="Who is this request for?"
+              inputClassName="rounded-lg border border-gray-300 bg-white px-4 py-3 text-base text-gray-900"
+              accent="#2563EB"
+              adornment={
+                customerId ? (
+                  <View className="rounded-full bg-emerald-50 px-2 py-0.5">
+                    <Text className="text-[11px] font-semibold text-emerald-600">Saved customer</Text>
+                  </View>
+                ) : undefined
+              }
+              adornmentWidth={customerId ? 110 : 0}
+            />
 
             {!customerId &&
               customerName.trim().length > 0 &&
               (address.trim().length > 0 || coords) && (
-                <View className="mb-3 flex-row items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2">
+                <View className="mb-3 mt-2.5 flex-row items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2">
                   <Ionicons name="person-add-outline" size={14} color="#B45309" />
                   <Text className="flex-1 text-xs font-medium text-amber-700">
                     New customer — not in your saved list yet.
@@ -532,54 +513,37 @@ function ResellerRequestDetails() {
               className="rounded-lg border border-gray-300 bg-white px-4 py-3 text-base"
             />
 
-            <View className="mb-1.5 mt-3.5 flex-row items-center justify-between">
-              <Text className="text-sm font-medium text-gray-700">Company / office</Text>
-              <Pressable
-                onPress={() => setCompanySameAsCustomer((v) => !v)}
-                className="flex-row items-center gap-2"
-                hitSlop={8}
-              >
-                <Text className="text-[13px] text-gray-600">Same as customer</Text>
-                <ToggleSwitch on={companySameAsCustomer} color="#2563EB" />
-              </Pressable>
+            <View className="mt-3.5">
+              <FieldLabel required>Location</FieldLabel>
+              {isWideWeb ? (
+                <View className="flex-row gap-2.5">
+                  <TextInput
+                    value={address}
+                    onChangeText={setAddress}
+                    placeholder="House/street, city, area"
+                    className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-3 text-base"
+                  />
+                  {locationButton}
+                </View>
+              ) : (
+                <>
+                  {locationButton}
+                  <TextInput
+                    value={address}
+                    onChangeText={setAddress}
+                    placeholder="House/street, city, area"
+                    multiline
+                    className="mt-2.5 rounded-lg border border-gray-300 bg-white px-4 py-3 text-base"
+                    style={{ minHeight: 60, textAlignVertical: 'top' }}
+                  />
+                </>
+              )}
+              {coords && <View className="mt-2.5"><MapPreview coords={coords} height={140} /></View>}
             </View>
-            <TextInput
-              value={companySameAsCustomer ? customerName : companyName}
-              onChangeText={setCompanyName}
-              editable={!companySameAsCustomer}
-              placeholder="Company / office name"
-              className={`rounded-lg border border-gray-300 px-4 py-3 text-base ${companySameAsCustomer ? 'bg-gray-100 text-gray-500' : 'bg-white'}`}
-            />
           </NumberedCard>
 
-          <NumberedCard n={2} title="Where and when?" subtitle="Seen by the technician before accepting" wide={isWideWeb} width={cardWidth}>
-            <FieldLabel required>Location</FieldLabel>
-            {isWideWeb ? (
-              <View className="flex-row gap-2.5">
-                <TextInput
-                  value={address}
-                  onChangeText={setAddress}
-                  placeholder="House/street, city, area"
-                  className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-3 text-base"
-                />
-                {locationButton}
-              </View>
-            ) : (
-              <>
-                {locationButton}
-                <TextInput
-                  value={address}
-                  onChangeText={setAddress}
-                  placeholder="House/street, city, area"
-                  multiline
-                  className="mt-2.5 rounded-lg border border-gray-300 bg-white px-4 py-3 text-base"
-                  style={{ minHeight: 60, textAlignVertical: 'top' }}
-                />
-              </>
-            )}
-            {coords && <View className="mt-2.5"><MapPreview coords={coords} height={140} /></View>}
-
-            <View className="mt-3.5 flex-row gap-2.5">
+          <NumberedCard n={2} title="When?" subtitle="Seen by the technician before accepting" wide={isWideWeb} width={cardWidth}>
+            <View className="flex-row gap-2.5">
               <View className="flex-1">
                 <FieldLabel required>Date</FieldLabel>
                 <DateField value={date} onChange={setDate} />
@@ -690,19 +654,6 @@ function ResellerRequestDetails() {
         </Pressable>
       </View>
 
-      <ContactPickerModal
-        visible={showNameSuggestions}
-        initialQuery=""
-        customers={myCustomers ?? []}
-        phoneContacts={phoneContacts.contacts}
-        onSelectCustomer={(c) => {
-          handleSelectCustomer(c);
-          setShowNameSuggestions(false);
-        }}
-        askAddress
-        onSelectNewWithAddress={handleSelectNew}
-        onClose={() => setShowNameSuggestions(false)}
-      />
 
       <LocationPickerModal
         visible={showLocationPicker}
@@ -727,15 +678,6 @@ function FieldLabel({ children, required }: { children: React.ReactNode; require
       {required && <Text className="text-red-500"> *</Text>}
     </Text>
   );
-}
-
-function initialsOf(name: string): string {
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('');
 }
 
 function NumberedCard({
