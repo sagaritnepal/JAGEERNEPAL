@@ -86,6 +86,10 @@ function ResellerRequestDetails() {
   const phoneContacts = usePhoneContacts();
 
   const [customerId, setCustomerId] = useState<string | null>(null);
+  // Raises the sheet's z-index while the Customer name dropdown is open, so its suggestion list
+  // draws over the Location section below it instead of the two overlapping (see ServiceDropdown,
+  // which raises its own card's z-index the same way for the same reason).
+  const [customerListOpen, setCustomerListOpen] = useState(false);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [companyName, setCompanyName] = useState('');
@@ -459,7 +463,10 @@ function ResellerRequestDetails() {
         )}
         <ServiceDropdown value={service} onChange={setService} />
 
-        <View className={`rounded-2xl border border-gray-200 bg-white ${isWideWeb ? 'p-5' : 'p-4'}`}>
+        <View
+          className={`rounded-2xl border border-gray-200 bg-white ${isWideWeb ? 'p-5' : 'p-4'}`}
+          style={{ zIndex: customerListOpen ? 50 : 0 }}
+        >
           <FormSection title="Who is it for?" subtitle="Saved customer or phone contact" first>
             <FieldLabel required>Customer name</FieldLabel>
             <SuggestInput
@@ -468,7 +475,11 @@ function ResellerRequestDetails() {
                 setCustomerName(v);
                 setCustomerId(null);
               }}
-              onFocus={() => phoneContacts.request()}
+              onFocus={() => {
+                phoneContacts.request();
+                setCustomerListOpen(true);
+              }}
+              onBlur={() => setTimeout(() => setCustomerListOpen(false), 150)}
               options={customerOptions}
               onSelectOption={pickCustomerOption}
               showWhenEmpty
