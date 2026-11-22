@@ -57,7 +57,7 @@ function currentStageIndex(status: RequestStatus, paid: boolean): number {
   return 0;
 }
 
-function StageStrip({ status, paid }: { status: RequestStatus; paid: boolean }) {
+function StageStrip({ status, paid, footer }: { status: RequestStatus; paid: boolean; footer?: React.ReactNode }) {
   const current = currentStageIndex(status, paid);
   return (
     <View className="mb-4 rounded-xl bg-white p-4">
@@ -84,6 +84,7 @@ function StageStrip({ status, paid }: { status: RequestStatus; paid: boolean }) 
           );
         })}
       </View>
+      {footer && <View className="mt-3 border-t border-gray-100 pt-3">{footer}</View>}
     </View>
   );
 }
@@ -358,9 +359,32 @@ function JobCard({ id }: { id: string }) {
     </>
   );
 
+  // In progress has nothing to add beyond "Work in progress", which the strip above already says -
+  // so its one real fact (when it was accepted, and how long ago) sits right in the strip's own
+  // footer instead of a second card underneath repeating the stage name.
+  const progressFooter =
+    request.status === 'in_progress' && jobCard?.started_at ? (
+      <>
+        <View className="flex-row items-center justify-between rounded-lg bg-blue-50 px-3 py-2.5">
+          <Text className="text-xs text-blue-900">
+            <Text className="font-semibold">Accepted: </Text>
+            {formatTimestamp(jobCard.started_at)}
+          </Text>
+          <Text className="text-xs font-bold text-blue-700">
+            {formatDuration(now - new Date(jobCard.started_at).getTime())} elapsed
+          </Text>
+        </View>
+        {request.quoted_price != null && (
+          <Text className="mt-2 text-xs text-gray-500">
+            Quoted price: NPR {Number(request.quoted_price).toLocaleString()}
+          </Text>
+        )}
+      </>
+    ) : undefined;
+
   const stageStrip = (
     <>
-      <StageStrip status={request.status} paid={request.payment_status === 'paid'} />
+      <StageStrip status={request.status} paid={request.payment_status === 'paid'} footer={progressFooter} />
     </>
   );
 
@@ -386,10 +410,10 @@ function JobCard({ id }: { id: string }) {
 
   const statusCard = (
     <>
-      <View className="mb-4 rounded-xl bg-white p-4">
-        {/* "Work in progress" repeats what the stage strip above already says, so that one case skips
-            straight to the one thing this card adds: the exact accepted time and how long it's been. */}
-        {request.status !== 'in_progress' && (
+      {/* In progress has nothing left to say here - its one fact (accepted time, elapsed) now sits in
+          the stage strip's own footer above instead of a second card. */}
+      {request.status !== 'in_progress' && (
+        <View className="mb-4 rounded-xl bg-white p-4">
           <Text className="text-lg font-semibold text-gray-900">
             {request.status === 'assigned'
               ? 'Offered to you - accept or reject'
@@ -401,51 +425,40 @@ function JobCard({ id }: { id: string }) {
                   ? 'Cancelled by the reseller - no more work needed'
                   : request.status.replace('_', ' ')}
           </Text>
-        )}
-        {request.status === 'cancelled' && !!request.cancel_reason?.trim() && (
-          <View className="mt-3 rounded-lg bg-red-50 p-3">
-            <Text className="text-xs text-red-900">
-              <Text className="font-semibold">Reason: </Text>
-              {request.cancel_reason.trim()}
-            </Text>
-          </View>
-        )}
-        {request.status === 'in_progress' && jobCard?.started_at && (
-          <View className="flex-row items-center justify-between rounded-lg bg-blue-50 px-3 py-2.5">
-            <Text className="text-xs text-blue-900">
-              <Text className="font-semibold">Accepted: </Text>
-              {formatTimestamp(jobCard.started_at)}
-            </Text>
-            <Text className="text-xs font-bold text-blue-700">
-              {formatDuration(now - new Date(jobCard.started_at).getTime())} elapsed
-            </Text>
-          </View>
-        )}
-        {request.status === 'resolved' && jobCard?.completed_at && (
-          <View className="mt-3 rounded-lg bg-gray-100 p-3">
-            {jobCard.started_at && (
-              <Text className="text-xs text-gray-700">
-                <Text className="font-semibold">Accepted at: </Text>
-                {formatTimestamp(jobCard.started_at)}
+          {request.status === 'cancelled' && !!request.cancel_reason?.trim() && (
+            <View className="mt-3 rounded-lg bg-red-50 p-3">
+              <Text className="text-xs text-red-900">
+                <Text className="font-semibold">Reason: </Text>
+                {request.cancel_reason.trim()}
               </Text>
-            )}
-            <Text className="mt-1 text-xs text-gray-700">
-              <Text className="font-semibold">Completed at: </Text>
-              {formatTimestamp(jobCard.completed_at)}
-            </Text>
-            {jobCard.started_at && (
-              <Text className="mt-1 text-xs font-bold text-gray-800">
-                Time elapsed: {formatDuration(new Date(jobCard.completed_at).getTime() - new Date(jobCard.started_at).getTime())}
+            </View>
+          )}
+          {request.status === 'resolved' && jobCard?.completed_at && (
+            <View className="mt-3 rounded-lg bg-gray-100 p-3">
+              {jobCard.started_at && (
+                <Text className="text-xs text-gray-700">
+                  <Text className="font-semibold">Accepted at: </Text>
+                  {formatTimestamp(jobCard.started_at)}
+                </Text>
+              )}
+              <Text className="mt-1 text-xs text-gray-700">
+                <Text className="font-semibold">Completed at: </Text>
+                {formatTimestamp(jobCard.completed_at)}
               </Text>
-            )}
-          </View>
-        )}
-        {request.quoted_price != null && (
-          <Text className="mt-2 text-sm text-gray-500">
-            Quoted price: NPR {Number(request.quoted_price).toLocaleString()}
-          </Text>
-        )}
-      </View>
+              {jobCard.started_at && (
+                <Text className="mt-1 text-xs font-bold text-gray-800">
+                  Time elapsed: {formatDuration(new Date(jobCard.completed_at).getTime() - new Date(jobCard.started_at).getTime())}
+                </Text>
+              )}
+            </View>
+          )}
+          {request.quoted_price != null && (
+            <Text className="mt-2 text-sm text-gray-500">
+              Quoted price: NPR {Number(request.quoted_price).toLocaleString()}
+            </Text>
+          )}
+        </View>
+      )}
     </>
   );
 
@@ -533,6 +546,10 @@ function JobCard({ id }: { id: string }) {
     </>
   );
 
+  const customerName = hasAccepted ? request.customer_name ?? customer?.full_name : undefined;
+  const customerPhone = hasAccepted ? request.customer_phone ?? customer?.phone : undefined;
+  const hasCustomerContact = hasAccepted && !!(customerName || customerPhone);
+
   const extras = (
     <>
       <RequestDetailsExtras
@@ -540,11 +557,48 @@ function JobCard({ id }: { id: string }) {
         scheduledTime={request.scheduled_time}
         location={request.location_data}
         photoUrls={request.photo_urls}
-        customerName={hasAccepted ? request.customer_name ?? customer?.full_name : undefined}
-        customerPhone={hasAccepted ? request.customer_phone ?? customer?.phone : undefined}
+        customerName={customerName}
+        customerPhone={customerPhone}
         contactPersonName={hasAccepted ? request.contact_person_name : undefined}
         contactPersonPhone={hasAccepted ? request.contact_person_phone : undefined}
+        hideCustomer
       />
+    </>
+  );
+
+  // Shown beside Reseller instead - the two contact cards sit together now.
+  const customerContact = (
+    <>
+      {hasCustomerContact && (
+        <View className="mb-4 rounded-xl bg-white p-4">
+          <Text className="mb-2 text-sm capitalize tracking-wide text-gray-400">Customer</Text>
+          <View className="flex-row items-center gap-3">
+            <PersonAvatar name={customerName} photoUrl={customer?.avatar_url} size={40} bg="bg-blue-600" />
+            <View className="flex-1">
+              {customerName && <Text className="text-sm font-semibold text-gray-900">{customerName}</Text>}
+              {customerPhone && <Text className="mt-0.5 text-sm text-gray-500">{customerPhone}</Text>}
+            </View>
+          </View>
+          {customerPhone && (
+            <View className="mt-3 flex-row gap-2">
+              <Pressable
+                onPress={() => Linking.openURL(`sms:${customerPhone}`)}
+                className="flex-1 flex-row items-center justify-center gap-1.5 rounded-xl bg-teal-50 py-2.5"
+              >
+                <Ionicons name="chatbubble-outline" size={15} color="#0F766E" />
+                <Text className="text-sm font-semibold text-teal-700">Message</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => Linking.openURL(`tel:${customerPhone}`)}
+                className="flex-1 flex-row items-center justify-center gap-1.5 rounded-xl bg-orange-50 py-2.5"
+              >
+                <Ionicons name="call-outline" size={15} color="#1d4ed8" />
+                <Text className="text-sm font-semibold text-orange-700">Call Customer</Text>
+              </Pressable>
+            </View>
+          )}
+        </View>
+      )}
     </>
   );
 
@@ -866,13 +920,14 @@ function JobCard({ id }: { id: string }) {
             {statusCard}
             {holdRequested}
             {onHold}
+            {partsAndLabor}
             {extras}
             {remark}
           </View>
           <View style={{ flex: 2, minWidth: 0 }}>
             {resellerContact}
+            {customerContact}
             {lockedNote}
-            {partsAndLabor}
             {chalan}
             {acceptReject}
             {advance}
@@ -898,6 +953,7 @@ function JobCard({ id }: { id: string }) {
       {holdRequested}
       {onHold}
       {resellerContact}
+      {customerContact}
       {lockedNote}
       {extras}
       {remark}

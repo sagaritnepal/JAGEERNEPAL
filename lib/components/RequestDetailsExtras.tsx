@@ -54,6 +54,7 @@ export function RequestDetailsExtras({
   contactPersonName,
   contactPersonPhone,
   companyName,
+  hideCustomer,
 }: {
   scheduledDate: string | null;
   scheduledTime: string | null;
@@ -65,17 +66,20 @@ export function RequestDetailsExtras({
   contactPersonName?: string | null;
   contactPersonPhone?: string | null;
   companyName?: string | null;
+  /** Leaves the Customer block out - for a caller that shows it elsewhere on the page instead (see
+   * the technician's Job Card, which puts it beside the Reseller card). */
+  hideCustomer?: boolean;
 }) {
   const hasSchedule = !!(scheduledDate || scheduledTime);
   const hasLocation = !!(location?.address || (location?.latitude != null && location?.longitude != null));
-  const hasCustomerContact = !!(customerName || customerPhone);
+  const showCustomer = !hideCustomer && !!(customerName || customerPhone);
   const showContactPerson = !!contactPersonName && contactPersonName.trim() !== (customerName ?? '').trim();
 
-  if (!hasSchedule && !hasLocation && !hasCustomerContact && photoUrls.length === 0) return null;
+  if (!hasSchedule && !hasLocation && !showCustomer && photoUrls.length === 0) return null;
 
   return (
     <View className="mt-4 rounded-xl bg-white p-5">
-      {hasCustomerContact && (
+      {showCustomer && (
         <View className="mb-4">
           <Text className="mb-2 text-sm capitalize tracking-wide text-gray-400">Customer</Text>
           <View className="flex-row items-center gap-2.5">
