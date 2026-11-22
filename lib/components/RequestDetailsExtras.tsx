@@ -74,13 +74,15 @@ export function RequestDetailsExtras({
   const hasLocation = !!(location?.address || (location?.latitude != null && location?.longitude != null));
   const showCustomer = !hideCustomer && !!(customerName || customerPhone);
   const showContactPerson = !!contactPersonName && contactPersonName.trim() !== (customerName ?? '').trim();
+  const showAppointment = hasSchedule || hasLocation;
+  const showPhotos = photoUrls.length > 0;
 
-  if (!hasSchedule && !hasLocation && !showCustomer && photoUrls.length === 0) return null;
+  if (!showAppointment && !showCustomer && !showPhotos) return null;
 
   return (
-    <View className="mt-4 rounded-xl bg-white p-5">
+    <View className="mt-4 overflow-hidden rounded-2xl border border-gray-200 bg-white">
       {showCustomer && (
-        <View className="mb-4">
+        <View className={`p-5 ${showAppointment || showPhotos ? 'border-b border-gray-100' : ''}`}>
           <Text className="mb-2 text-sm capitalize tracking-wide text-gray-400">Customer</Text>
           <View className="flex-row items-center gap-2.5">
             <PersonAvatar name={customerName} photoUrl={customerPhotoUrl} size={36} bg="bg-orange-500" />
@@ -129,26 +131,54 @@ export function RequestDetailsExtras({
         </View>
       )}
 
-      <Text className="mb-2 text-sm capitalize tracking-wide text-gray-400">Appointment</Text>
+      {showAppointment && (
+        <View className={`p-5 ${showPhotos ? 'border-b border-gray-100' : ''}`}>
+          <View className="mb-3 flex-row items-center gap-2.5">
+            <View className="h-8 w-8 items-center justify-center rounded-full bg-blue-50">
+              <Ionicons name="calendar-outline" size={16} color="#2563EB" />
+            </View>
+            <Text className="text-base font-bold text-gray-900">Appointment</Text>
+          </View>
 
-      {hasSchedule && (
-        <Text className="text-sm text-gray-700">{formatScheduledWhen(scheduledDate, scheduledTime)}</Text>
-      )}
+          {hasSchedule && (
+            <View className="flex-row items-center gap-2.5 py-1">
+              <View className="h-7 w-7 items-center justify-center rounded-full bg-gray-100">
+                <Ionicons name="time-outline" size={14} color="#6B7280" />
+              </View>
+              <Text className="flex-1 text-sm font-semibold text-gray-900">
+                {formatScheduledWhen(scheduledDate, scheduledTime)}
+              </Text>
+            </View>
+          )}
 
-      {hasLocation && (
-        <View className="mt-2">
-          {location?.address ? <Text className="text-sm text-gray-700">{location.address}</Text> : null}
-          {location?.latitude != null && location?.longitude != null && (
-            <Pressable
-              onPress={() => Linking.openURL(`https://www.google.com/maps?q=${location.latitude},${location.longitude}`)}
-            >
-              <Text className="mt-1 text-xs text-blue-600">View on Google Maps →</Text>
-            </Pressable>
+          {hasLocation && (
+            <View className={`flex-row items-start gap-2.5 py-1 ${hasSchedule ? 'mt-1 border-t border-gray-100 pt-3' : ''}`}>
+              <View className="h-7 w-7 items-center justify-center rounded-full bg-gray-100">
+                <Ionicons name="location-outline" size={14} color="#6B7280" />
+              </View>
+              <View className="flex-1">
+                {location?.address ? <Text className="text-sm text-gray-700">{location.address}</Text> : null}
+                {location?.latitude != null && location?.longitude != null && (
+                  <Pressable
+                    onPress={() => Linking.openURL(`https://www.google.com/maps?q=${location.latitude},${location.longitude}`)}
+                    className="mt-1.5 flex-row items-center self-start"
+                    style={{ gap: 4 }}
+                  >
+                    <Text className="text-xs font-bold text-blue-600">View on Google Maps</Text>
+                    <Ionicons name="arrow-forward" size={11} color="#2563EB" />
+                  </Pressable>
+                )}
+              </View>
+            </View>
           )}
         </View>
       )}
 
-      <RequestPhotos photoUrls={photoUrls} />
+      {showPhotos && (
+        <View className="px-5 pb-5">
+          <RequestPhotos photoUrls={photoUrls} />
+        </View>
+      )}
     </View>
   );
 }
