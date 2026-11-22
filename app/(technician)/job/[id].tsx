@@ -60,7 +60,7 @@ function currentStageIndex(status: RequestStatus, paid: boolean): number {
 function StageStrip({ status, paid }: { status: RequestStatus; paid: boolean }) {
   const current = currentStageIndex(status, paid);
   return (
-    <View className="mb-6 rounded-xl bg-white p-4">
+    <View className="mb-4 rounded-xl bg-white p-4">
       <Text className="mb-3 text-sm capitalize tracking-wide text-gray-400">Progress</Text>
       <View className="flex-row" style={{ gap: 6 }}>
         {STAGES.map((label, i) => {
@@ -130,6 +130,9 @@ function JobCard({ id }: { id: string }) {
   // turned typing 500 into "0500".
   const [parts, setParts] = useState<PartRow[]>([{ name: '', quantity: '1', cost: '' }]);
   const [laborCost, setLaborCost] = useState('');
+  // Raises the open row's (and the whole card's) z-index while its product dropdown is open, so the
+  // list draws over the rows, Add part and Labor cost below it instead of the two overlapping.
+  const [activePartIndex, setActivePartIndex] = useState<number | null>(null);
   // The number on the chalan slip: with its photo, it is needed before the job can be marked complete.
   const [chalanNo, setChalanNo] = useState('');
   const [answering, setAnswering] = useState<'accept' | 'reject' | 'reopen' | null>(null);
@@ -383,13 +386,13 @@ function JobCard({ id }: { id: string }) {
 
   const statusCard = (
     <>
-      <View className="mb-6 rounded-xl bg-white p-5">
-        <Text className="text-sm capitalize tracking-wide text-gray-400">Current status</Text>
-        <Text className="mt-1 text-lg font-semibold text-gray-900">
-          {request.status === 'assigned'
-            ? 'Offered to you - accept or reject'
-            : request.status === 'in_progress'
-              ? 'Work in progress'
+      <View className="mb-4 rounded-xl bg-white p-4">
+        {/* "Work in progress" repeats what the stage strip above already says, so that one case skips
+            straight to the one thing this card adds: the exact accepted time and how long it's been. */}
+        {request.status !== 'in_progress' && (
+          <Text className="text-lg font-semibold text-gray-900">
+            {request.status === 'assigned'
+              ? 'Offered to you - accept or reject'
               : request.status === 'resolved'
                 ? request.payment_status === 'paid'
                   ? 'Completed and paid'
@@ -397,7 +400,8 @@ function JobCard({ id }: { id: string }) {
                 : request.status === 'cancelled'
                   ? 'Cancelled by the reseller - no more work needed'
                   : request.status.replace('_', ' ')}
-        </Text>
+          </Text>
+        )}
         {request.status === 'cancelled' && !!request.cancel_reason?.trim() && (
           <View className="mt-3 rounded-lg bg-red-50 p-3">
             <Text className="text-xs text-red-900">
@@ -406,19 +410,14 @@ function JobCard({ id }: { id: string }) {
             </Text>
           </View>
         )}
-        {request.status === 'in_progress' && (
-          <Text className="mt-1 text-xs text-gray-500">
-            Finish the work, then tap "Mark job complete" at the bottom of this page.
-          </Text>
-        )}
         {request.status === 'in_progress' && jobCard?.started_at && (
-          <View className="mt-3 rounded-lg bg-blue-50 p-3">
+          <View className="flex-row items-center justify-between rounded-lg bg-blue-50 px-3 py-2.5">
             <Text className="text-xs text-blue-900">
-              <Text className="font-semibold">Accepted at: </Text>
+              <Text className="font-semibold">Accepted: </Text>
               {formatTimestamp(jobCard.started_at)}
             </Text>
-            <Text className="mt-1 text-xs font-bold text-blue-700">
-              Time elapsed: {formatDuration(now - new Date(jobCard.started_at).getTime())}
+            <Text className="text-xs font-bold text-blue-700">
+              {formatDuration(now - new Date(jobCard.started_at).getTime())} elapsed
             </Text>
           </View>
         )}
@@ -489,7 +488,7 @@ function JobCard({ id }: { id: string }) {
   const resellerContact = (
     <>
       {hasResellerContact && (
-        <View className="mb-6 rounded-xl bg-white p-5">
+        <View className="mb-4 rounded-xl bg-white p-4">
           <Text className="mb-2 text-sm capitalize tracking-wide text-gray-400">Reseller</Text>
           <View className="flex-row items-center gap-3">
             <PersonAvatar name={resellerName} photoUrl={reseller?.avatar_url} size={40} bg="bg-orange-500" />
@@ -552,7 +551,7 @@ function JobCard({ id }: { id: string }) {
   const remark = (
     <>
       {request.remark && (
-        <View className="mb-6 mt-4 rounded-xl bg-white p-5">
+        <View className="mb-4 rounded-xl bg-white p-4">
           <Text className="mb-2 text-sm capitalize tracking-wide text-gray-400">Remark</Text>
           <Text className="text-sm text-gray-700">{request.remark}</Text>
         </View>
@@ -563,7 +562,7 @@ function JobCard({ id }: { id: string }) {
   const chalan = (
     <>
       {hasAccepted && (
-        <View className="mb-6 overflow-hidden rounded-2xl border border-gray-200 bg-white">
+        <View className="mb-4 rounded-2xl border border-gray-200 bg-white">
           <View className="flex-row items-center gap-2.5 px-5 pt-5" style={{ paddingBottom: request.status === 'in_progress' ? 16 : 20 }}>
             <View className="h-9 w-9 items-center justify-center rounded-full bg-blue-50">
               <Ionicons name="document-attach-outline" size={18} color="#2563EB" />
@@ -605,7 +604,7 @@ function JobCard({ id }: { id: string }) {
   const partsAndLabor = (
     <>
       {request.status === 'in_progress' && (
-        <View className="mb-6 overflow-hidden rounded-2xl border border-gray-200 bg-white">
+        <View className="mb-4 rounded-2xl border border-gray-200 bg-white" style={{ zIndex: activePartIndex != null ? 50 : 1 }}>
           <View className="flex-row items-center gap-2.5 px-5 pb-4 pt-5">
             <View className="h-9 w-9 items-center justify-center rounded-full bg-blue-50">
               <Ionicons name="construct-outline" size={18} color="#2563EB" />
@@ -632,12 +631,18 @@ function JobCard({ id }: { id: string }) {
                 sub: p.stock_level > 0 ? `${p.stock_level} in stock` : 'Out of stock',
               }));
               return (
-                <View key={index} className="mb-2.5 rounded-xl border border-gray-200 bg-gray-50 p-2.5">
+                <View
+                  key={index}
+                  className="mb-2.5 rounded-xl border border-gray-200 bg-gray-50 p-2.5"
+                  style={{ zIndex: activePartIndex === index ? 10 : 0 }}
+                >
                   <View className="flex-row items-center gap-2">
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <SuggestInput
                         value={part.name}
                         onChangeText={(v) => updatePart(index, 'name', v)}
+                        onFocus={() => setActivePartIndex(index)}
+                        onBlur={() => setTimeout(() => setActivePartIndex((cur) => (cur === index ? null : cur)), 150)}
                         options={options}
                         onSelectOption={(o) => {
                           const match = matches.find((p) => p.id === o.key);
@@ -856,8 +861,8 @@ function JobCard({ id }: { id: string }) {
 
   if (wide) {
     return (
-      <ScrollView className="flex-1 bg-gray-50 px-8 pt-5" contentContainerStyle={{ paddingBottom: 40 }}>
-        <View className="flex-row items-start" style={{ gap: 24 }}>
+      <ScrollView className="flex-1 bg-gray-50 px-8 pt-4" contentContainerStyle={{ paddingBottom: 24 }}>
+        <View className="flex-row items-start" style={{ gap: 20 }}>
           <View style={{ flex: 3, minWidth: 0 }}>
             {heading}
             {stageStrip}
