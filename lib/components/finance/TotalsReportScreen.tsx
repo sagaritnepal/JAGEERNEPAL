@@ -77,6 +77,9 @@ interface Entry {
   payment?: boolean;
   /** The bill's own number, for a Sales / Purchase bill. */
   billNo?: string;
+  /** The free-text remark typed on the bill, on its own - unlike `note`, never combined with the bill
+   * number (see the Sales Report's Remark column). */
+  remark?: string;
   /** What the bill is for - its items - where the report names it beside the vendor (see sellsVehicles). */
   itemNames?: string;
   /** The model numbers entered on the bill's items, where the report shows them (a vehicle account's Purchase Report). */
@@ -124,6 +127,20 @@ function bsShortDate(date: string): string {
   return shortDateLabel(date.slice(0, 10));
 }
 
+/** One fact in the Sales Report's expanded strip - a small label over its value. */
+function DetailFact({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={{ gap: 1, minWidth: 0 }}>
+      <Text className="text-[10px] font-bold uppercase text-gray-400" style={{ letterSpacing: 0.4 }}>
+        {label}
+      </Text>
+      <Text className="text-[12.5px] font-semibold text-gray-800" numberOfLines={1}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
 /** The day ('YYYY-MM-DD') an entry's date falls on: a bill's own date as it is, a timestamp as the
  * device's own day. */
 function dayOf(date: string): string {
@@ -151,6 +168,16 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
   // ... and its sale / purchase bills read with the item on them in place of the remark.
   const itemForRemark = (kind === 'purchase' || kind === 'sale') && vehicleAccount;
   const [viewingTx, setViewingTx] = useState<BusinessTransaction | null>(null);
+  // The Sales Report: tapping a bill opens a strip of extra detail right under its row instead of
+  // leaving the list - a second tap on the same row closes it again. Several can be open at once.
+  const [expandedBills, setExpandedBills] = useState<Set<string>>(new Set());
+  const toggleExpanded = (e: Entry) =>
+    setExpandedBills((prev) => {
+      const next = new Set(prev);
+      if (next.has(e.id)) next.delete(e.id);
+      else next.add(e.id);
+      return next;
+    });
   // The Expenses Report's individual (a person, a bike, a payee) whose payments are open in a popup:
   // the same table that is under it, on a card of its own that scrolls.
   const [subjectView, setSubjectView] = useState<{ name: string; rows: Entry[] } | null>(null);
@@ -371,6 +398,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
                 : tidyName((t.customer_id ? nameById.get(t.customer_id) : undefined) || t.party_name?.trim()) || 'No party',
             subject: kind === 'expense' ? tidyName(t.party_name?.trim()) || category || 'Uncategorized' : undefined,
             billNo: t.bill_no?.trim() || '',
+            remark: t.note?.trim() || '',
             itemNames: showItem ? itemNamesOf(t.items) : undefined,
             modelNames: showModel ? modelNamesOf(t.items) : undefined,
             ledgerType: (t.customer_id ? ledgerTypeById.get(t.customer_id) : undefined) ?? '',
@@ -955,6 +983,9 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
     </Text>
   );
   const chevron = () => <Ionicons name="chevron-forward" size={14} color="#D1D5DB" />;
+  // The Sales Report's row toggles a detail strip open instead of navigating away - this arrow turns
+  // to say so, up once it's open.
+  const expandChevron = (open: boolean) => <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={14} color={open ? '#2563EB' : '#D1D5DB'} />;
 
   const detailsCell = (e: Entry, compact: boolean) => (
     <View style={{ minWidth: 0, gap: 2 }}>
@@ -993,6 +1024,29 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
     ) : (
       <Text className="text-[12.5px] text-gray-300">—</Text>
     );
+  // The Sales Report's expanded strip - what the row's own columns leave out: the bill number (the
+  // Remark column took its place), the items and model where those columns aren't already shown, and
+  // a way to still open the bill in full.
+  const billDetailPanel = (e: Entry) => {
+    if (kind !== 'sale' || !expandedBills.has(e.id)) return null;
+    return (
+      <View className="border-b border-gray-200 bg-gray-50 px-4 py-3" style={{ gap: 10 }}>
+        <View className="flex-row flex-wrap" style={{ columnGap: 24, rowGap: 8 }}>
+          <DetailFact label="Bill No." value={e.billNo || '—'} />
+          {!showItem && <DetailFact label="Item" value={e.itemNames || '—'} />}
+          {!showModel && <DetailFact label="Model" value={e.modelNames || '—'} />}
+          <DetailFact label="Ledger type" value={e.ledgerType || '—'} />
+          <DetailFact label="Date" value={toBsHistoryLabel(e.date.slice(0, 10))} />
+        </View>
+        {!!e.tx && (
+          <Pressable onPress={() => setViewingTx(e.tx!)} hitSlop={6} className="flex-row items-center self-start" style={{ gap: 4 }}>
+            <Text className="text-[12px] font-bold text-blue-600">View full bill</Text>
+            <Ionicons name="arrow-forward" size={12} color="#2563EB" />
+          </Pressable>
+        )}
+      </View>
+    );
+  };
   const itemColumn: BookColumn<Entry> = {
     key: 'item',
     label: 'Item',
@@ -1019,11 +1073,11 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
         { key: 'date', label: 'Date', width: 140, render: (e) => <Text className="text-[12.5px] text-gray-600">{toBsHistoryLabel(e.date.slice(0, 10))}</Text> },
         {
           key: 'bill',
-          label: 'Bill No.',
+          label: kind === 'sale' ? 'Remark' : 'Bill No.',
           width: 200,
           render: (e) => (
             <Text className="text-[12.5px] font-semibold text-gray-800" numberOfLines={1}>
-              {e.billNo || '—'}
+              {(kind === 'sale' ? e.remark : e.billNo) || '—'}
             </Text>
           ),
         },
@@ -1040,7 +1094,13 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
         ...(showModel ? [modelColumn] : []),
         { key: 'ledger', label: 'Ledger type', width: 150, render: ledgerTypePill },
         { key: 'amount', label: 'Amount', width: 130, align: 'right', render: amountCell },
-        { key: 'act', label: '', width: 34, align: 'right', render: chevron },
+        {
+          key: 'act',
+          label: '',
+          width: 34,
+          align: 'right',
+          render: kind === 'sale' ? (e) => expandChevron(expandedBills.has(e.id)) : chevron,
+        },
       ]
     : [
         { key: 'sn', label: 'SN', width: 38, render: (_e, i) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text> },
@@ -1053,13 +1113,26 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
                 {highlightText(e.category || e.party || '—', search)}
               </Text>
               <Text className="text-[11px] text-gray-400" numberOfLines={1}>
-                {[[e.itemNames, e.modelNames].filter(Boolean).join(' · ') || null, toBsHistoryLabel(e.date.slice(0, 10)), e.billNo ? `Bill ${e.billNo}` : null, e.ledgerType || null].filter(Boolean).join(' · ')}
+                {[
+                  [e.itemNames, e.modelNames].filter(Boolean).join(' · ') || null,
+                  toBsHistoryLabel(e.date.slice(0, 10)),
+                  kind === 'sale' ? e.remark || null : e.billNo ? `Bill ${e.billNo}` : null,
+                  e.ledgerType || null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
               </Text>
             </View>
           ),
         },
         { key: 'amount', label: 'Amount', width: 96, align: 'right', render: amountCell },
-        { key: 'act', label: '', width: 30, align: 'right', render: chevron },
+        {
+          key: 'act',
+          label: '',
+          width: 30,
+          align: 'right',
+          render: kind === 'sale' ? (e) => expandChevron(expandedBills.has(e.id)) : chevron,
+        },
       ];
   // A payment's colour is its own direction (green in, red out), not the report's.
   const ledgerColumns = columnsFor('Type', (e) => (
@@ -1124,7 +1197,8 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
             columns={grouped !== null ? billColumns : columns}
             rows={shownEntries}
             rowKey={(e) => e.id}
-            onRowPress={open}
+            onRowPress={kind === 'sale' && grouped !== null ? toggleExpanded : open}
+            expanded={kind === 'sale' && grouped !== null ? billDetailPanel : undefined}
             groupOf={grouped !== null ? undefined : (e) => bsMonthGroup(e.date)}
             footer={{
               label: `${shownEntries.length} ${shownEntries.length === 1 ? 'entry' : 'entries'} · Total`,
