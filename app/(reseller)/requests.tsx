@@ -427,9 +427,12 @@ function JobRowView({ data, stage, wide }: { data: JobRowData; stage: Stage; wid
             {data.sn ?? ''}
           </Text>
         )}
-        <Text className="text-[12px] font-bold text-gray-800" style={{ width: w.token, flexShrink: 0 }} numberOfLines={1}>
-          {data.token ? `Token no: ${data.token.replace(/^#/, '')}` : '—'}
-        </Text>
+        <View style={{ width: w.token, flexShrink: 0, gap: 2 }}>
+          <Text className="text-[12px] font-bold text-gray-800" numberOfLines={1}>
+            {data.token ? `Token no: ${data.token.replace(/^#/, '')}` : '—'}
+          </Text>
+          {data.chalan && <ChalanLink chalan={data.chalan} size={10.5} />}
+        </View>
 
         {has('when') && (
           <Text className="text-[12px] text-gray-800" style={{ width: w.when, flexShrink: 0 }} numberOfLines={1}>
@@ -443,7 +446,6 @@ function JobRowView({ data, stage, wide }: { data: JobRowData; stage: Stage; wid
             <Text className="text-[13px] font-bold text-gray-900" numberOfLines={1}>
               {data.title}
             </Text>
-            {data.chalan && <ChalanLink chalan={data.chalan} size={11} />}
             {data.lines?.map((line) => (
               <Text key={line} className="text-[11px] text-gray-600" numberOfLines={1}>
                 {line}
