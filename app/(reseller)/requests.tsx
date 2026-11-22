@@ -680,8 +680,6 @@ function RequestJobRow({
       primary: true,
       onPress: () => router.push(`/(reseller)/transactions?type=sale&add=1&fromJob=${item.id}` as any),
     };
-  } else if (stage === 'completed' && billing === 'billed') {
-    action = { label: 'Record payment', icon: 'cash-outline', primary: true, onPress: open };
   } else {
     action = { label: 'View', icon: 'eye-outline', primary: false, onPress: open };
   }

@@ -823,22 +823,32 @@ export default function CompanyDashboard() {
       <Text className="text-[14px] font-extrabold" style={{ color: value >= 0 ? '#0F766E' : '#B91C1C' }}>{value < 0 ? '−' : ''}{npr(Math.abs(value))}</Text>
     </View>
   );
-  // Sales and purchases over the last twelve months: the two totals and what is left, then the graph - laid out like
-  // the Receivable & payable card.
-  const salesTotal = series.sale.reduce((x, y) => x + y, 0);
-  const purchaseTotal = series.purchase.reduce((x, y) => x + y, 0);
+  // Sales and purchases over the last twelve months: the graph below, laid out like the Receivable &
+  // payable card.
+  // The tiles themselves show this calendar year's total, not the trailing 12 months the chart below
+  // plots - the same "{year} total" the Sales / Purchase Report itself defaults to (see
+  // TotalsReportScreen's `year`), so the figure here is the one still on screen after tapping through.
+  const currentYear = new Date().getFullYear();
+  const salesThisYear = (transactions ?? []).reduce(
+    (sum, t) => (t.type === 'sale' && new Date(t.bill_date ?? t.created_at).getFullYear() === currentYear ? sum + t.amount : sum),
+    0
+  );
+  const purchaseThisYear = (transactions ?? []).reduce(
+    (sum, t) => (t.type === 'purchase' && new Date(t.bill_date ?? t.created_at).getFullYear() === currentYear ? sum + t.amount : sum),
+    0
+  );
   const bestOf = (list: number[], none: string) => {
     const top = Math.max(...list);
     return top > 0 ? `Best month ${months[list.indexOf(top)].label} · ${lakh(top)}` : none;
   };
   const trend = (
     <Panel title="Sales and purchases" subtitle="What you sold and what you bought">
-      <Text className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-500">Last 12 months</Text>
+      <Text className="mb-2 text-[11px] font-bold uppercase tracking-wider text-gray-500">{currentYear} total</Text>
       <View className="flex-row flex-wrap" style={{ gap: 10 }}>
-        {moneyTile({ label: 'Sales', value: salesTotal, caption: bestOf(series.sale, 'No sales in 12 months'), icon: 'trending-up-outline', color: '#1D4ED8', tint: '#EFF6FF', onPress: () => go('/(reseller)/sales-report') })}
-        {moneyTile({ label: 'Purchases', value: purchaseTotal, caption: bestOf(series.purchase, 'No purchases in 12 months'), icon: 'cart-outline', color: '#B91C1C', tint: '#FEF2F2', onPress: () => go('/(reseller)/purchase-report') })}
+        {moneyTile({ label: 'Sales', value: salesThisYear, caption: bestOf(series.sale, 'No sales in 12 months'), icon: 'trending-up-outline', color: '#1D4ED8', tint: '#EFF6FF', onPress: () => go('/(reseller)/sales-report') })}
+        {moneyTile({ label: 'Purchases', value: purchaseThisYear, caption: bestOf(series.purchase, 'No purchases in 12 months'), icon: 'cart-outline', color: '#B91C1C', tint: '#FEF2F2', onPress: () => go('/(reseller)/purchase-report') })}
       </View>
-      <View className="mt-2">{netLine('Sales − purchases', salesTotal - purchaseTotal)}</View>
+      <View className="mt-2">{netLine('Sales − purchases', salesThisYear - purchaseThisYear)}</View>
 
       <View className="mb-2 mt-5 flex-row flex-wrap items-center justify-between" style={{ gap: 8 }}>
         <Text className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Sales and purchases · last 12 months</Text>
