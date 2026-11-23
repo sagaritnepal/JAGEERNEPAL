@@ -1052,8 +1052,8 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
   const rows = useMemo(() => [...statementAsc].reverse(), [statementAsc]);
 
   // Every ledger reads as one line per bill, in the Ledger table's own columns: Receivable, Payable and the
-  // Balance left on it, last. A bill's line names everything on it - its items and its service charges
-  // (Installation ...) - and counts the bill's full total, so nothing billed goes missing. A payment whose
+  // Balance left on it, last. A bill's line reads "Sale E-144" and counts the bill's full total (items, service
+  // charges such as Installation, VAT, discount), so nothing billed goes missing; a tap drops down its items. A payment whose
   // remark names an item first (the Paid and Received pages write it so) goes on the bill that item is on;
   // anything else is a line of its own, so the totals still match the name card. A line opens its entries in
   // a popup; an entry there opens as it does everywhere (a bill's detail, a payment's edit form).
@@ -1089,10 +1089,8 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
       if (!items.length) continue;
       used.add(r.key);
       const side = t.type === 'purchase' ? 'v' : 'c';
-      const charges = (t.service_charges ?? []).filter((c) => Number(c.amount) > 0).map((c) => c.name?.trim() || 'Service');
-      if (!charges.length && Number(t.installation_charge) > 0) charges.push('Installation');
-      const names = [...items, ...charges.filter((c) => !items.some((i) => key(i) === key(c)))];
-      const g = groupFor(`${side}|bill|${r.key}`, names.join(' / '));
+      const g = groupFor(`${side}|bill|${r.key}`, [t.type === 'purchase' ? 'Purchase' : 'Sale', t.bill_no?.trim()].filter(Boolean).join(' '));
+      g.bill = t;
       g.billed += r.amount;
       add(g, r, { billed: r.amount });
       for (const i of items) billOfItem.set(`${side}|${key(i)}`, g);
@@ -1128,7 +1126,6 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
     const latest = (g: VehicleGroup) => g.rows.reduce((a, r) => (r.createdAt > a ? r.createdAt : a), '');
     return list.sort((a, b) => (a.lastDay === b.lastDay ? latest(b).localeCompare(latest(a)) : a.lastDay < b.lastDay ? 1 : -1));
   }, [statementAsc]);
-  const [openGroup, setOpenGroup] = useState<VehicleGroup | null>(null);
 
   // Only one entry form is open at a time: a person with no entries yet is offered both
   // (Add Entry for the customer side, Payment Out for the vendor side), and opening one
@@ -1151,7 +1148,7 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
     }
   }
 
-  // Every entry can be changed or taken out from the vehicle popup: a bill on its own form (deleting it takes its
+  // Every entry can be changed or taken out from its line's drop-down: a bill on its own form (deleting it takes its
   // amount off the ledger too), a typed payment in its edit form. A line the system writes from somewhere else - a
   // rental's daily wage, a job's payment - follows that record, so it says where to change it instead.
   const deleteBill = useSupabaseDelete('business_transactions');
@@ -1541,31 +1538,11 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
         )}
 
         {vehicleGroups && vehicleGroups.length > 0 ? (
-          <VehicleTable groups={vehicleGroups} full={tableMode} onOpen={setOpenGroup} />
+          <VehicleTable groups={vehicleGroups} full={tableMode} onEditRow={editAnyRow} onDeleteRow={deleteAnyRow} />
         ) : (
           historyView
         )}
       </KeyboardAwareScrollView>
-      {openGroup && (
-        <PopupCard title={openGroup.name} onClose={() => setOpenGroup(null)} maxWidth={1180} closeOnOutside>
-          <VehicleEntries
-            group={openGroup}
-            full={tableMode}
-            onEditRow={(r) => {
-              setOpenGroup(null);
-              editAnyRow(r);
-            }}
-            onDeleteRow={(r) => {
-              setOpenGroup(null);
-              deleteAnyRow(r);
-            }}
-            onOpenRow={(r) => {
-              setOpenGroup(null);
-              openRow(r);
-            }}
-          />
-        </PopupCard>
-      )}
       {/* Editing an entry: the form shows itself as a popup (see EntryShell). Keyed on the
           entry so reopening another one starts from its own values. */}
       {editingEntry && (
@@ -1603,8 +1580,10 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
 
 interface VehicleGroup {
   key: string;
-  /** The vehicle; or, for an entry that names none, what the entry is. */
+  /** "Sale E-144" for a bill's line; or, for an entry on no bill, what the entry is. */
   name: string;
+  /** The bill the line is, when it is one - its items drop down under the line. */
+  bill?: BusinessTransaction;
   side?: 'vendor' | 'customer';
   /** What it was bought / sold for (the bills), and what was owed without a bill. */
   billed: number;
@@ -1625,7 +1604,35 @@ interface VehiclePart {
 }
 
 /** A vehicle account's ledger page: one line per vehicle, in the Ledger table's columns. */
-function VehicleTable({ groups, full, onOpen }: { groups: VehicleGroup[]; full: boolean; onOpen: (g: VehicleGroup) => void }) {
+function VehicleTable({
+  groups,
+  full,
+  onEditRow,
+  onDeleteRow,
+}: {
+  groups: VehicleGroup[];
+  full: boolean;
+  onEditRow: (r: HistoryRow) => void;
+  onDeleteRow: (r: HistoryRow) => void;
+}) {
+  // The lines dropped down (a tap opens one under itself; nothing pops up).
+  const [open, setOpen] = useState<Set<string>>(() => new Set());
+  const press = (g: VehicleGroup) => {
+    setOpen((was) => {
+      const next = new Set(was);
+      if (next.has(g.key)) next.delete(g.key);
+      else next.add(g.key);
+      return next;
+    });
+  };
+  const lineName = (g: VehicleGroup) => (
+    <View className="flex-row items-center" style={{ gap: 6, minWidth: 0 }}>
+      <Ionicons name={open.has(g.key) ? 'chevron-down' : 'chevron-forward'} size={14} color="#6B7280" />
+      <Text className="text-[13px] font-semibold text-gray-900" numberOfLines={1} style={{ flexShrink: 1 }}>
+        {g.name}
+      </Text>
+    </View>
+  );
   // What is left on the line, as the Ledger reads it: to pay a vendor, to receive from a customer.
   const net = (g: VehicleGroup) => (g.side === 'vendor' ? round2(g.billed - g.paid + g.received) : round2(g.billed + g.paid - g.received));
   const payable = (g: VehicleGroup) => {
@@ -1648,7 +1655,7 @@ function VehicleTable({ groups, full, onOpen }: { groups: VehicleGroup[]; full: 
   const columns: BookColumn<VehicleGroup>[] = full
     ? [
         { key: 'sn', label: 'SN', width: 52, render: (_g, i) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text> },
-        { key: 'vehicle', label: 'Particulars', render: (g) => <Text className="text-[13px] font-semibold text-gray-900" numberOfLines={2}>{g.name}</Text> },
+        { key: 'vehicle', label: 'Particulars', render: lineName },
         {
           // The last date, with the line's reference numbers under it.
           key: 'last',
@@ -1681,7 +1688,7 @@ function VehicleTable({ groups, full, onOpen }: { groups: VehicleGroup[]; full: 
           label: 'Particulars',
           render: (g) => (
             <View style={{ minWidth: 0, gap: 2 }}>
-              <Text className="text-[13px] font-semibold text-gray-900" numberOfLines={2}>{g.name}</Text>
+              {lineName(g)}
               <Text className="text-[11px] text-gray-400" numberOfLines={1}>
                 {g.billed ? `Balance ${formatMoney(g.billed)}` : ''}
               </Text>
@@ -1701,7 +1708,8 @@ function VehicleTable({ groups, full, onOpen }: { groups: VehicleGroup[]; full: 
       columns={columns}
       rows={groups}
       rowKey={(g) => g.key}
-      onRowPress={onOpen}
+      onRowPress={press}
+      expanded={(g) => (open.has(g.key) ? <LineDrop group={g} onEditRow={onEditRow} onDeleteRow={onDeleteRow} /> : null)}
       stickyHeader
       footer={{
         label: `${groups.length} ${groups.length === 1 ? 'line' : 'lines'} · Total`,
@@ -1720,141 +1728,82 @@ function VehicleTable({ groups, full, onOpen }: { groups: VehicleGroup[]; full: 
   );
 }
 
-/** A vehicle's entries, oldest first, in the vehicle table's columns: what each put on it, and what is left on the
- * vehicle after it. An entry opens as it does everywhere (a bill's detail, a payment's edit form). */
-function VehicleEntries({
+/** What a line drops down: a bill's items with their quantity and amount, then its service charges
+ * (Installation ...); and every entry on the line - the bill itself, payments made on it - with Edit and Delete. */
+function LineDrop({
   group,
-  full,
-  onOpenRow,
   onEditRow,
   onDeleteRow,
 }: {
   group: VehicleGroup;
-  full: boolean;
-  onOpenRow: (r: HistoryRow) => void;
   onEditRow: (r: HistoryRow) => void;
   onDeleteRow: (r: HistoryRow) => void;
 }) {
-  const vendor = group.side === 'vendor';
-  let running = 0;
-  // "Left" runs as the money came, oldest first (the bills were gathered before the payments) - and the entries
-  // are shown newest first, the latest on top.
-  const ordered = [...group.rows].sort((a, b) => a.day.localeCompare(b.day) || a.createdAt.localeCompare(b.createdAt));
-  const lines = ordered
-    .map((r) => {
-    const part = group.parts.get(r.key) ?? { billed: 0, paid: 0, received: 0 };
-    running = round2(running + (vendor ? part.billed - part.paid + part.received : part.billed + part.paid - part.received));
-    // What the entry adds to what they owe you (+) or to what you owe them (-).
-    const change = round2(vendor ? part.paid - part.received - part.billed : part.billed + part.paid - part.received);
-    return {
-      row: r,
-      part,
-      change,
-      net: vendor ? -running : running,
-      payable: vendor ? Math.max(0, running) : Math.max(0, -running),
-      receivable: vendor ? Math.max(0, -running) : Math.max(0, running),
-    };
-    })
-    .reverse();
-  type Line = (typeof lines)[number];
-  const fig = (v: number, color: string) =>
-    v ? (
-      <Text className="text-[12.5px] font-bold" style={{ color }} numberOfLines={1}>
-        {formatMoney(v)}
-      </Text>
-    ) : (
-      <Text className="text-[12.5px] text-gray-300">—</Text>
-    );
-  const details = (l: Line) => (
-    <Text className="text-[13px] font-semibold text-gray-900" numberOfLines={1}>
-      {l.row.label}
-      {!!l.row.detail && <Text className="font-normal text-gray-500">{` · ${l.row.detail}`}</Text>}
-    </Text>
-  );
-  // What the entry put on the vehicle: a bill in black, money paid out in red, money received in green.
-  const amount = (l: Line) =>
-    fig(l.part.billed || l.part.paid || l.part.received, l.part.billed ? '#111827' : l.part.paid ? MONEY.out.text : MONEY.in.text);
-  // Edit and Delete on every entry.
-  const actions: BookColumn<Line> = {
-    key: 'actions',
-    label: '',
-    width: 76,
-    align: 'right',
-    render: (l) => (
-      <View className="flex-row items-center justify-end" style={{ gap: 12 }}>
-        <Pressable onPress={() => onEditRow(l.row)} hitSlop={6} accessibilityLabel="Edit entry">
-          <Ionicons name="create-outline" size={16} color="#2563EB" />
-        </Pressable>
-        <Pressable onPress={() => onDeleteRow(l.row)} hitSlop={6} accessibilityLabel="Delete entry">
-          <Ionicons name="trash-outline" size={16} color="#DC2626" />
-        </Pressable>
-      </View>
-    ),
-  };
-  // The balance left is the one after the latest entry, which is on top.
-  const last = lines[0];
-  const columns: BookColumn<Line>[] = full
+  const bill = group.bill;
+  const charges = (bill?.service_charges ?? []).filter((c) => Number(c.amount) > 0);
+  const items = bill
     ? [
-        { key: 'sn', label: 'SN', width: 52, render: (_l, i) => <Text className="text-[12.5px] text-gray-500">{lines.length - i}</Text> },
-        { key: 'details', label: 'Details', render: details },
-        {
-          // The date, with the entry's number under it.
-          key: 'date',
-          label: 'Date',
-          width: 150,
-          render: (l) => (
-            <View style={{ minWidth: 0 }}>
-              <Text className="text-[12.5px] text-gray-700">{l.row.dateLabel}</Text>
-              {!!l.row.reference && <Text className="text-[11px] text-gray-400">{`Ref ${l.row.reference}`}</Text>}
-            </View>
-          ),
-        },
-        { key: 'receivable', label: 'Receivable', width: 110, align: 'right', render: (l) => fig(Math.max(0, l.change), MONEY.in.text) },
-        { key: 'payable', label: 'Payable', width: 110, align: 'right', render: (l) => fig(Math.max(0, -l.change), MONEY.out.text) },
-        { key: 'balance', label: 'Balance', width: 120, align: 'right', render: (l) => <PartyBalance position={partyPosition({ receivable: l.net, payable: 0 })} compact /> },
-        actions,
+        ...(bill.items ?? [])
+          .filter((i) => i.description?.trim())
+          .map((i) => ({ name: i.description.trim(), qty: Number(i.qty) || null, amount: Number(i.amount) || 0 })),
+        ...(charges.length
+          ? charges.map((c) => ({ name: c.name?.trim() || 'Service', qty: null as number | null, amount: Number(c.amount) }))
+          : Number(bill.installation_charge) > 0
+            ? [{ name: 'Installation', qty: null as number | null, amount: Number(bill.installation_charge) }]
+            : []),
       ]
-    : [
-        {
-          key: 'details',
-          label: 'Details',
-          render: (l) => (
-            <View style={{ minWidth: 0, gap: 2 }}>
-              {details(l)}
+    : [];
+  const head = 'text-[11px] font-semibold uppercase text-gray-500';
+  const cell = 'text-[12.5px] text-gray-800';
+  const entries = [...group.rows].reverse();
+  return (
+    <View className="border-t border-gray-100 bg-gray-50" style={{ paddingVertical: 8, paddingLeft: 52, paddingRight: 16, gap: 10 }}>
+      {items.length > 0 && (
+        <View>
+          <View className="flex-row" style={{ paddingVertical: 4 }}>
+            <Text className={`flex-1 ${head}`}>Item</Text>
+            <Text className={`text-right ${head}`} style={{ width: 60 }}>Qty</Text>
+            <Text className={`text-right ${head}`} style={{ width: 110 }}>Amount</Text>
+          </View>
+          {items.map((l, i) => (
+            <View key={i} className="flex-row border-t border-gray-100" style={{ paddingVertical: 6 }}>
+              <Text className={`flex-1 ${cell}`} numberOfLines={2}>{l.name}</Text>
+              <Text className={`text-right ${cell}`} style={{ width: 60 }}>{l.qty ?? '—'}</Text>
+              <Text className={`text-right font-semibold ${cell}`} style={{ width: 110 }}>{formatMoney(l.amount)}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+      <View>
+        <View className="flex-row" style={{ paddingVertical: 4 }}>
+          <Text className={`flex-1 ${head}`}>Entry</Text>
+          <Text className={`text-right ${head}`} style={{ width: 110 }}>Amount</Text>
+          <View style={{ width: 60 }} />
+        </View>
+        {entries.map((r) => (
+          <View key={r.key} className="flex-row items-center border-t border-gray-100" style={{ paddingVertical: 6 }}>
+            <View className="flex-1" style={{ minWidth: 0 }}>
+              <Text className={cell} numberOfLines={1}>
+                {[r.label, r.detail].filter(Boolean).join(' · ')}
+              </Text>
               <Text className="text-[11px] text-gray-400" numberOfLines={1}>
-                {[l.row.dateLabel, l.row.reference || null].filter(Boolean).join(' · ')}
+                {[r.dateLabel, r.reference ? `Ref ${r.reference}` : null].filter(Boolean).join(' · ')}
               </Text>
             </View>
-          ),
-        },
-        {
-          key: 'amount',
-          label: 'Amount',
-          width: 110,
-          align: 'right',
-          render: amount,
-        },
-        { key: 'left', label: 'Left', width: 110, align: 'right', render: (l) => (l.payable ? fig(l.payable, MONEY.out.text) : fig(l.receivable, MONEY.in.text)) },
-        actions,
-      ];
-  return (
-    <BookTable
-      columns={columns}
-      rows={lines}
-      rowKey={(l) => l.row.key}
-      onRowPress={(l) => onOpenRow(l.row)}
-      stickyHeader
-      rowPressable={(l) => !!l.row.tx || l.row.manual}
-      footer={{
-        label: `${lines.length} ${lines.length === 1 ? 'entry' : 'entries'} · Total`,
-        cells: full
-          ? {
-              receivable: fig(round2(lines.reduce((t, l) => t + Math.max(0, l.change), 0)), MONEY.in.text),
-              payable: fig(round2(lines.reduce((t, l) => t + Math.max(0, -l.change), 0)), MONEY.out.text),
-              balance: <PartyBalance position={partyPosition({ receivable: last?.net ?? 0, payable: 0 })} compact />,
-            }
-          : { left: last?.payable ? fig(last.payable, MONEY.out.text) : fig(last?.receivable ?? 0, MONEY.in.text) },
-      }}
-    />
+            <Text className="text-right text-[12.5px] font-bold" style={{ width: 110, color: r.amountColor }}>
+              {formatMoney(r.amount)}
+            </Text>
+            <View className="flex-row items-center justify-end" style={{ width: 60, gap: 12 }}>
+              <Pressable onPress={() => onEditRow(r)} hitSlop={6} accessibilityLabel="Edit entry">
+                <Ionicons name="create-outline" size={16} color="#2563EB" />
+              </Pressable>
+              <Pressable onPress={() => onDeleteRow(r)} hitSlop={6} accessibilityLabel="Delete entry">
+                <Ionicons name="trash-outline" size={16} color="#DC2626" />
+              </Pressable>
+            </View>
+          </View>
+        ))}
+      </View>
+    </View>
   );
 }
