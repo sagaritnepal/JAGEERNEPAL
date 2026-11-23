@@ -407,10 +407,57 @@ function ResellerRequestDetails() {
       handleSelectCustomer(match.customer);
       return;
     }
-    // A phone contact, not a saved customer yet - the amber banner below offers Register now.
+    // A phone contact, not a saved customer yet - leaving the field confirms adding them (below).
     setCustomerName(match?.name ?? option.label);
     setCustomerPhone(match?.phone ?? '');
     setCustomerId(null);
+  }
+
+  // Right where the name is typed, not held back for Submit: leaving the field with a name that
+  // isn't a saved customer confirms adding them immediately (name, phone, optional location, in the
+  // same popup a Sale bill uses - see NewPartyConfirm.tsx), so the request itself already has a
+  // resolved customer by the time it's submitted. Edit mode never changes which customer a job is
+  // linked to, so this never runs there.
+  async function confirmNewCustomerIfNeeded() {
+    if (editRequest || customerId || !userId) return;
+    const typed = customerName.trim();
+    if (!typed) return;
+    const existing = (myCustomers ?? []).find((c) => c.name.trim().toLowerCase() === typed.toLowerCase());
+    if (existing) {
+      setCustomerId(existing.id);
+      if (!customerPhone.trim() && existing.phone) setCustomerPhone(existing.phone);
+      return;
+    }
+    const checked = await askNewParty({
+      name: typed,
+      kind: 'customer',
+      askPhone: true,
+      phone: customerPhone.trim() || null,
+      askAddress: true,
+      address: address.trim() || null,
+    });
+    if (!checked) return;
+    setCustomerName(checked.name);
+    if (checked.phone) setCustomerPhone(checked.phone);
+    if (checked.address && !address.trim()) setAddress(checked.address);
+    try {
+      const created = await createCustomer.mutateAsync({
+        owner_id: userId,
+        name: checked.name,
+        phone: checked.phone || null,
+        address: checked.address || address.trim() || null,
+        latitude: coords?.latitude ?? null,
+        longitude: coords?.longitude ?? null,
+        ...withType(checked),
+      });
+      setCustomerId(created.id);
+    } catch (err) {
+      // Most likely a duplicate-phone conflict (customers_owner_phone_idx) against a record that
+      // isn't in myCustomers' current cache yet - link to it instead of leaving this unresolved.
+      const existingByPhone = checked.phone ? (myCustomers ?? []).find((c) => c.phone === checked.phone) : undefined;
+      if (existingByPhone) setCustomerId(existingByPhone.id);
+      else showAlert('Could not add customer', getErrorMessage(err));
+    }
   }
 
   function cancel() {
@@ -511,7 +558,12 @@ function ResellerRequestDetails() {
                 phoneContacts.request();
                 setCustomerListOpen(true);
               }}
-              onBlur={() => setTimeout(() => setCustomerListOpen(false), 150)}
+              onBlur={() =>
+                setTimeout(() => {
+                  setCustomerListOpen(false);
+                  confirmNewCustomerIfNeeded();
+                }, 150)
+              }
               options={customerOptions}
               onSelectOption={pickCustomerOption}
               showWhenEmpty
