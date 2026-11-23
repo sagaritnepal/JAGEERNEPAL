@@ -214,27 +214,96 @@ function ResellerRequestDetails() {
       showAlert('Check the phone number', "Enter the customer's 10-digit phone number, or leave it blank.");
       return;
     }
-    if (!date.trim()) {
-      showAlert('Add a date', 'Let us know when you need this service.');
-      return;
-    }
-    if (!address.trim() && !coords) {
-      showAlert('Add a location', 'Use your current location or type an address.');
-      return;
-    }
-    const price = parseAmount(quotedPrice);
-    if (quotedPrice.trim() && (price == null || price <= 0)) {
-      showAlert('Invalid price', 'Enter a valid price in NPR, or leave it blank if you don\'t know it yet.');
-      return;
-    }
-    // Service is optional now - fall back to a placeholder so issue_type (not-null in the
-    // database) still gets a value, and still parses back into category/action on edit.
-    const issueType = service ? `${category} - ${action}` : 'General - Not specified';
 
     submittingRef.current = true;
     setSubmitting(true);
     let saved = false;
     try {
+      // Who this is for is resolved first - a name that isn't a saved customer is confirmed (name,
+      // phone and optionally a location, in one popup) here, same as a Sale bill's new customer/
+      // vendor (see NewPartyConfirm.tsx), before the job's own date/location are checked below - so a
+      // location typed into that popup already covers the location check that follows.
+      let linkedCustomerId: string | null = customerId;
+      let finalCustomerName = customerName.trim();
+      let finalCustomerPhone = customerPhone.trim();
+      let finalAddress = address.trim();
+      let finalCoords = coords;
+
+      if (!editRequest) {
+        if (linkedCustomerId) {
+          try {
+            await updateCustomer.mutateAsync({
+              id: linkedCustomerId,
+              values: {
+                name: finalCustomerName,
+                phone: finalCustomerPhone || null,
+                address: finalAddress || null,
+                latitude: finalCoords?.latitude ?? null,
+                longitude: finalCoords?.longitude ?? null,
+              },
+            });
+          } catch {
+            // The booking still goes ahead linked to the existing record even if this edit didn't save.
+          }
+        } else {
+          const checked = await askNewParty({
+            name: finalCustomerName,
+            kind: 'customer',
+            askPhone: true,
+            phone: finalCustomerPhone || null,
+            askAddress: true,
+            address: finalAddress || null,
+          });
+          if (!checked) return; // Cancelled: back to the form, nothing saved.
+          finalCustomerName = checked.name;
+          finalCustomerPhone = checked.phone ?? finalCustomerPhone;
+          setCustomerName(finalCustomerName);
+          if (checked.phone) setCustomerPhone(checked.phone);
+          if (checked.address && !finalAddress) {
+            finalAddress = checked.address;
+            setAddress(checked.address);
+          }
+          try {
+            const created = await createCustomer.mutateAsync({
+              owner_id: userId,
+              name: finalCustomerName,
+              phone: finalCustomerPhone || null,
+              address: finalAddress || null,
+              latitude: finalCoords?.latitude ?? null,
+              longitude: finalCoords?.longitude ?? null,
+              ...withType(checked),
+            });
+            linkedCustomerId = created.id;
+          } catch {
+            // Most likely a duplicate-phone conflict (customers_owner_phone_idx)
+            // against a record that isn't in myCustomers' current cache yet -
+            // link to it by phone instead of leaving the booking unlinked from
+            // the contact book.
+            const existing = finalCustomerPhone
+              ? (myCustomers ?? []).find((c) => c.phone === finalCustomerPhone)
+              : undefined;
+            linkedCustomerId = existing?.id ?? null;
+          }
+        }
+      }
+
+      if (!date.trim()) {
+        showAlert('Add a date', 'Let us know when you need this service.');
+        return;
+      }
+      if (!finalAddress && !finalCoords) {
+        showAlert('Add a location', 'Use your current location or type an address.');
+        return;
+      }
+      const price = parseAmount(quotedPrice);
+      if (quotedPrice.trim() && (price == null || price <= 0)) {
+        showAlert('Invalid price', 'Enter a valid price in NPR, or leave it blank if you don\'t know it yet.');
+        return;
+      }
+      // Service is optional now - fall back to a placeholder so issue_type (not-null in the
+      // database) still gets a value, and still parses back into category/action on edit.
+      const issueType = service ? `${category} - ${action}` : 'General - Not specified';
+
       const photoUrls: string[] = [];
       for (let i = 0; i < photos.length; i++) {
         const uri = photos[i];
@@ -243,13 +312,13 @@ function ResellerRequestDetails() {
 
       if (editRequest) {
         // Saves to this job only. The saved customer it is linked to is left as it is (see above).
-        const addressChanged = address.trim() !== (editRequest.location_data?.address ?? '').trim();
+        const addressChanged = finalAddress !== (editRequest.location_data?.address ?? '').trim();
         const pinMoved =
-          (coords?.latitude ?? null) !== (editRequest.location_data?.latitude ?? null) ||
-          (coords?.longitude ?? null) !== (editRequest.location_data?.longitude ?? null);
+          (finalCoords?.latitude ?? null) !== (editRequest.location_data?.latitude ?? null) ||
+          (finalCoords?.longitude ?? null) !== (editRequest.location_data?.longitude ?? null);
         // A changed address no longer matches the saved map pin - drop it rather than send the technician to the old place.
         const location_data =
-          addressChanged && !pinMoved ? { address: address.trim() } : { ...coords, address: address.trim() };
+          addressChanged && !pinMoved ? { address: finalAddress } : { ...finalCoords, address: finalAddress };
         const serviceChanged = !!service && (
           service.category !== initialService.current?.category || service.action !== initialService.current?.action
         );
@@ -257,11 +326,11 @@ function ResellerRequestDetails() {
           id: editRequest.id,
           values: {
             customer_id: customerId,
-            customer_name: customerName.trim(),
-            customer_phone: customerPhone.trim() || null,
-            contact_person_name: customerName.trim(),
-            contact_person_phone: customerPhone.trim() || null,
-            company_name: (companySameAsCustomer ? customerName : companyName).trim() || null,
+            customer_name: finalCustomerName,
+            customer_phone: finalCustomerPhone || null,
+            contact_person_name: finalCustomerName,
+            contact_person_phone: finalCustomerPhone || null,
+            company_name: (companySameAsCustomer ? finalCustomerName : companyName).trim() || null,
             issue_type: serviceChanged ? issueType : editRequest.issue_type,
             description: notes.trim() || null,
             quoted_price: price,
@@ -276,68 +345,6 @@ function ResellerRequestDetails() {
         showAlert('Job updated', 'Your changes have been saved.');
         router.replace(returnPath);
         return;
-      }
-
-      // Keep the customer directory in sync: update the saved record if one was picked (and possibly
-      // edited here); a name that doesn't match a saved customer is confirmed first - same
-      // confirm-before-save flow a Sale bill uses for a new customer/vendor (see NewPartyConfirm.tsx) -
-      // instead of being saved straight away.
-      let linkedCustomerId: string | null = customerId;
-      let finalCustomerName = customerName.trim();
-      let finalCustomerPhone = customerPhone.trim();
-      if (linkedCustomerId) {
-        try {
-          await updateCustomer.mutateAsync({
-            id: linkedCustomerId,
-            values: {
-              name: finalCustomerName,
-              phone: finalCustomerPhone || null,
-              address: address.trim() || null,
-              latitude: coords?.latitude ?? null,
-              longitude: coords?.longitude ?? null,
-            },
-          });
-        } catch {
-          // The booking still goes ahead linked to the existing record even if this edit didn't save.
-        }
-      } else {
-        const checked = await askNewParty({
-          name: finalCustomerName,
-          kind: 'customer',
-          askPhone: true,
-          phone: finalCustomerPhone || null,
-        });
-        if (!checked) {
-          // Cancelled: back to the form, nothing saved.
-          submittingRef.current = false;
-          setSubmitting(false);
-          return;
-        }
-        finalCustomerName = checked.name;
-        finalCustomerPhone = checked.phone ?? finalCustomerPhone;
-        setCustomerName(finalCustomerName);
-        if (checked.phone) setCustomerPhone(checked.phone);
-        try {
-          const created = await createCustomer.mutateAsync({
-            owner_id: userId,
-            name: finalCustomerName,
-            phone: finalCustomerPhone || null,
-            address: address.trim() || null,
-            latitude: coords?.latitude ?? null,
-            longitude: coords?.longitude ?? null,
-            ...withType(checked),
-          });
-          linkedCustomerId = created.id;
-        } catch {
-          // Most likely a duplicate-phone conflict (customers_owner_phone_idx)
-          // against a record that isn't in myCustomers' current cache yet -
-          // link to it by phone instead of leaving the booking unlinked from
-          // the contact book.
-          const existing = finalCustomerPhone
-            ? (myCustomers ?? []).find((c) => c.phone === finalCustomerPhone)
-            : undefined;
-          linkedCustomerId = existing?.id ?? null;
-        }
       }
 
       await createRequest.mutateAsync({
@@ -356,7 +363,7 @@ function ResellerRequestDetails() {
         quoted_price: price,
         scheduled_date: date.trim(),
         scheduled_time: time.trim() || null,
-        location_data: { ...coords, address: address.trim() },
+        location_data: { ...finalCoords, address: finalAddress },
         photo_urls: photoUrls,
         repeat_of_request_id: validRepeatOfId,
       });
