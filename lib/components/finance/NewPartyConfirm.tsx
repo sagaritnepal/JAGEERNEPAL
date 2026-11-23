@@ -89,6 +89,7 @@ function NewPartyDialog({
       maxWidth={460}
       hideClose
       closeOnOutside
+      scrollable={false}
       footer={<FormActions onCancel={cancel} onSave={add} saveLabel={`Add ${kind}`} />}
     >
       <Text className="text-[13px] text-gray-500">
