@@ -33,7 +33,6 @@ import { usePhoneContacts } from '../../lib/hooks/usePhoneContacts';
 import { SuggestInput, type SuggestOption } from '../../lib/components/finance/SuggestInput';
 import { buildCustomerSuggestions } from '../../lib/utils/customerSuggestions';
 import { isValidPhone10 } from '../../lib/utils/phone';
-import { isPastDate } from '../../lib/utils/localDate';
 import { parseAmount, digitsInput } from '../../lib/utils/number';
 import type { Customer } from '../../types/database.types';
 
@@ -243,11 +242,6 @@ function ResellerRequestDetails() {
     }
     if (!date.trim()) {
       showAlert('Add a date', 'Let us know when you need this service.');
-      return;
-    }
-    // An overdue job can still be edited: only a date that was changed has to be in the future.
-    if ((!editRequest || date !== editRequest.scheduled_date) && isPastDate(date)) {
-      showAlert('Pick a future date', "The visit date can't be in the past.");
       return;
     }
     if (!address.trim() && !coords) {

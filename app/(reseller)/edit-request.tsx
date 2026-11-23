@@ -8,7 +8,6 @@ import { DateField, TimeField } from '../../lib/components/DateTimeFields';
 import { FormSection } from '../../lib/components/finance/FormSection';
 import { showAlert, getErrorMessage } from '../../lib/utils/alert';
 import { isValidPhone10 } from '../../lib/utils/phone';
-import { isPastDate } from '../../lib/utils/localDate';
 import { parseAmount, digitsInput } from '../../lib/utils/number';
 
 // Only reachable from a MyRequestCard "Edit" button, which only shows for
@@ -66,10 +65,6 @@ function EditRequest({ id }: { id: string }) {
     }
     if (!date.trim() || !time.trim()) {
       showAlert('Add date and time', 'Let us know when this service is needed.');
-      return;
-    }
-    if (date !== request.scheduled_date && isPastDate(date)) {
-      showAlert('Pick a future date', "The visit date can't be in the past.");
       return;
     }
     const price = parseAmount(quotedPrice);
