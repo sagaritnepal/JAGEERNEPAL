@@ -1051,12 +1051,12 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
   const statementAsc = useMemo<HistoryRow[]>(() => withRunningBalance(allLines, 0), [allLines]);
   const rows = useMemo(() => [...statementAsc].reverse(), [statementAsc]);
 
-  // Every ledger reads as one line per vehicle (item), in the Ledger table's own columns: Receivable, Payable
-  // and the Balance left on it, last.
-  // A bill names its vehicles as items (a bill of one vehicle counts in full, else each vehicle's own line); a
-  // payment names its vehicle first in its remark (the Paid and Received pages write it so). Anything that names
-  // no vehicle on a bill here is a line of its own, so the totals still match the name card. A line opens its
-  // entries in a popup; an entry there opens as it does everywhere (a bill's detail, a payment's edit form).
+  // Every ledger reads as one line per bill, in the Ledger table's own columns: Receivable, Payable and the
+  // Balance left on it, last. A bill's line names everything on it - its items and its service charges
+  // (Installation ...) - and counts the bill's full total, so nothing billed goes missing. A payment whose
+  // remark names an item first (the Paid and Received pages write it so) goes on the bill that item is on;
+  // anything else is a line of its own, so the totals still match the name card. A line opens its entries in
+  // a popup; an entry there opens as it does everywhere (a bill's detail, a payment's edit form).
   const vehicleGroups = useMemo<VehicleGroup[] | null>(() => {
     const key = (name: string) => name.trim().replace(/\s+/g, ' ').toLowerCase();
     const groups = new Map<string, VehicleGroup>();
@@ -1079,26 +1079,23 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
       if (r.reference && !g.refs.includes(r.reference)) g.refs.push(r.reference);
     };
     const used = new Set<string>();
-    // The bills first: they say which vehicles there are.
+    // The item a payment can name -> the bill it is on (the latest such bill).
+    const billOfItem = new Map<string, VehicleGroup>();
+    // The bills first, one line each.
     for (const r of statementAsc) {
       const t = r.tx;
       if (!t || r.info || (t.type !== 'sale' && t.type !== 'purchase')) continue;
-      const cars = itemListOf(t.items);
-      if (!cars.length) continue;
+      const items = itemListOf(t.items);
+      if (!items.length) continue;
       used.add(r.key);
       const side = t.type === 'purchase' ? 'v' : 'c';
-      if (cars.length === 1) {
-        const g = groupFor(`${side}|${key(cars[0])}`, cars[0]);
-        g.billed += r.amount;
-        add(g, r, { billed: r.amount });
-      } else {
-        for (const i of t.items ?? []) {
-          if (!i.description?.trim()) continue;
-          const g = groupFor(`${side}|${key(i.description)}`, i.description.trim());
-          g.billed += Number(i.amount) || 0;
-          add(g, r, { billed: Number(i.amount) || 0 });
-        }
-      }
+      const charges = (t.service_charges ?? []).filter((c) => Number(c.amount) > 0).map((c) => c.name?.trim() || 'Service');
+      if (!charges.length && Number(t.installation_charge) > 0) charges.push('Installation');
+      const names = [...items, ...charges.filter((c) => !items.some((i) => key(i) === key(c)))];
+      const g = groupFor(`${side}|bill|${r.key}`, names.join(' / '));
+      g.billed += r.amount;
+      add(g, r, { billed: r.amount });
+      for (const i of items) billOfItem.set(`${side}|${key(i)}`, g);
     }
     // Then the money, by the vehicle its remark names.
     for (const r of statementAsc) {
@@ -1106,7 +1103,7 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
       const e = r.vendor ?? r.ledger;
       if (!e) continue;
       const side = r.vendor ? 'v' : 'c';
-      const named = e.note ? groups.get(`${side}|${key(e.note.split(' · ')[0])}`) : undefined;
+      const named = e.note ? billOfItem.get(`${side}|${key(e.note.split(' · ')[0])}`) : undefined;
       const g = named ?? groupFor(`row|${r.key}`, [r.label, r.detail].filter(Boolean).join(' · '));
       const amount = Number(e.amount);
       // Owed to a vendor without a bill (a daily wage ...); money paid back to a customer.
@@ -1651,7 +1648,7 @@ function VehicleTable({ groups, full, onOpen }: { groups: VehicleGroup[]; full: 
   const columns: BookColumn<VehicleGroup>[] = full
     ? [
         { key: 'sn', label: 'SN', width: 52, render: (_g, i) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text> },
-        { key: 'vehicle', label: 'Vehicle', render: (g) => <Text className="text-[13px] font-semibold text-gray-900" numberOfLines={1}>{g.name}</Text> },
+        { key: 'vehicle', label: 'Particulars', render: (g) => <Text className="text-[13px] font-semibold text-gray-900" numberOfLines={2}>{g.name}</Text> },
         {
           // The last date, with the line's reference numbers under it.
           key: 'last',
@@ -1681,10 +1678,10 @@ function VehicleTable({ groups, full, onOpen }: { groups: VehicleGroup[]; full: 
     : [
         {
           key: 'vehicle',
-          label: 'Vehicle',
+          label: 'Particulars',
           render: (g) => (
             <View style={{ minWidth: 0, gap: 2 }}>
-              <Text className="text-[13px] font-semibold text-gray-900" numberOfLines={1}>{g.name}</Text>
+              <Text className="text-[13px] font-semibold text-gray-900" numberOfLines={2}>{g.name}</Text>
               <Text className="text-[11px] text-gray-400" numberOfLines={1}>
                 {g.billed ? `Balance ${formatMoney(g.billed)}` : ''}
               </Text>
