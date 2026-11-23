@@ -13,6 +13,7 @@ import { PaymentQrModal } from '../../../lib/components/PaymentQrModal';
 import { SaveContactButtonLabeled } from '../../../lib/components/SaveContactButton';
 import { showAlert, getErrorMessage } from '../../../lib/utils/alert';
 import { jobAmountDue } from '../../../lib/utils/jobAmount';
+import { REVIEW_TAGS_POSITIVE, REVIEW_TAGS_CONSTRUCTIVE } from '../../../lib/constants/reviewTags';
 import type { JobCard, ServiceRequest } from '../../../types/database.types';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -241,8 +242,13 @@ function RatingForm({
 }) {
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
   const insertReview = useSupabaseInsert('reviews');
   const [submitted, setSubmitted] = useState(false);
+
+  function toggleTag(tag: string) {
+    setTags((cur) => (cur.includes(tag) ? cur.filter((t) => t !== tag) : [...cur, tag]));
+  }
 
   async function handleSubmit() {
     try {
@@ -252,6 +258,7 @@ function RatingForm({
         client_id: clientId,
         rating,
         comment: comment.trim() || null,
+        tags,
       });
       setSubmitted(true);
     } catch (err) {
@@ -276,6 +283,23 @@ function RatingForm({
             <Text className={star <= rating ? 'text-2xl text-amber-500' : 'text-2xl text-gray-300'}>★</Text>
           </Pressable>
         ))}
+      </View>
+      <View className="mb-3 flex-row flex-wrap" style={{ gap: 6 }}>
+        {[...REVIEW_TAGS_POSITIVE, ...REVIEW_TAGS_CONSTRUCTIVE].map((tag) => {
+          const on = tags.includes(tag);
+          return (
+            <Pressable
+              key={tag}
+              onPress={() => toggleTag(tag)}
+              className="rounded-full border px-3 py-1.5"
+              style={{ borderColor: on ? '#2563EB' : '#E5E7EB', backgroundColor: on ? '#EFF6FF' : '#fff' }}
+            >
+              <Text className="text-xs font-semibold" style={{ color: on ? '#1D4ED8' : '#4B5563' }}>
+                {tag}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
       <TextInput
         value={comment}

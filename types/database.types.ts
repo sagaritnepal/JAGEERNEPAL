@@ -478,6 +478,9 @@ export interface Review {
   technician_id: string;
   rating: number;
   comment: string | null;
+  /** A few quick tags the client picked alongside the star rating (migration 0114) - see
+   * lib/constants/reviewTags.ts for the fixed vocabulary. Empty for a review left before that. */
+  tags?: string[];
   created_at: string;
 }
 
