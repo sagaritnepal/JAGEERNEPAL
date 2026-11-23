@@ -9,6 +9,8 @@ import {
   Image,
   Platform,
   useWindowDimensions,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -484,7 +486,12 @@ function ResellerRequestDetails() {
           className={`rounded-2xl border border-gray-200 bg-white ${isWideWeb ? 'p-5' : 'p-4'}`}
           style={{ zIndex: customerListOpen ? 50 : 0 }}
         >
-          <FormSection title="Who is it for?" subtitle="Saved customer or phone contact" first>
+          <FormSection
+            title="Who is it for?"
+            subtitle="Saved customer or phone contact"
+            first
+            style={{ zIndex: customerListOpen ? 50 : 0, position: 'relative' }}
+          >
             <FieldLabel required>Customer name</FieldLabel>
             <SuggestInput
               value={customerName}
@@ -739,15 +746,20 @@ function FormSection({
   title,
   subtitle,
   first,
+  style,
   children,
 }: {
   title: string;
   subtitle: string;
   first?: boolean;
+  /** Raises this section's own stacking context above the ones after it - a FormSection has no
+   * explicit zIndex by default, so a dropdown open inside one does not by itself outrank a later
+   * section's content (see the Customer name/Location overlap this fixes). */
+  style?: StyleProp<ViewStyle>;
   children: React.ReactNode;
 }) {
   return (
-    <View className={first ? '' : 'mt-5 border-t border-gray-100 pt-5'}>
+    <View className={first ? '' : 'mt-5 border-t border-gray-100 pt-5'} style={style}>
       <View className="mb-3.5">
         <Text className="text-base font-bold text-gray-900">{title}</Text>
         <Text className="text-xs text-gray-400">{subtitle}</Text>
