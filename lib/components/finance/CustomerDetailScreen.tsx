@@ -1659,8 +1659,6 @@ function VehicleTable({ groups, full, onOpen }: { groups: VehicleGroup[]; full: 
           ),
         },
         { key: 'balance', label: 'Balance', width: 120, align: 'right', render: (g) => fig(g.billed, '#111827') },
-        { key: 'paid', label: 'Total Paid', width: 110, align: 'right', render: (g) => fig(g.paid, MONEY.out.text) },
-        { key: 'received', label: 'Total Received', width: 120, align: 'right', render: (g) => fig(g.received, MONEY.in.text) },
         { key: 'payable', label: 'Payable', width: 110, align: 'right', render: (g) => fig(payable(g), MONEY.out.text) },
         { key: 'receivable', label: 'Receivable', width: 110, align: 'right', render: (g) => fig(receivable(g), MONEY.in.text) },
       ]
@@ -1672,9 +1670,7 @@ function VehicleTable({ groups, full, onOpen }: { groups: VehicleGroup[]; full: 
             <View style={{ minWidth: 0, gap: 2 }}>
               <Text className="text-[13px] font-semibold text-gray-900" numberOfLines={1}>{g.name}</Text>
               <Text className="text-[11px] text-gray-400" numberOfLines={1}>
-                {[g.billed ? `Balance ${formatMoney(g.billed)}` : null, g.paid ? `Paid ${formatMoney(g.paid)}` : null, g.received ? `Received ${formatMoney(g.received)}` : null]
-                  .filter(Boolean)
-                  .join(' · ')}
+                {g.billed ? `Balance ${formatMoney(g.billed)}` : ''}
               </Text>
             </View>
           ),
@@ -1699,8 +1695,6 @@ function VehicleTable({ groups, full, onOpen }: { groups: VehicleGroup[]; full: 
         cells: full
           ? {
               balance: fig(sum((g) => g.billed), '#111827'),
-              paid: fig(sum((g) => g.paid), MONEY.out.text),
-              received: fig(sum((g) => g.received), MONEY.in.text),
               payable: fig(sum(payable), MONEY.out.text),
               receivable: fig(sum(receivable), MONEY.in.text),
             }
@@ -1760,6 +1754,9 @@ function VehicleEntries({
       {!!l.row.detail && <Text className="font-normal text-gray-500">{` · ${l.row.detail}`}</Text>}
     </Text>
   );
+  // What the entry put on the vehicle: a bill in black, money paid out in red, money received in green.
+  const amount = (l: Line) =>
+    fig(l.part.billed || l.part.paid || l.part.received, l.part.billed ? '#111827' : l.part.paid ? MONEY.out.text : MONEY.in.text);
   // Edit and Delete on every entry.
   const actions: BookColumn<Line> = {
     key: 'actions',
@@ -1779,7 +1776,6 @@ function VehicleEntries({
   };
   // The balance left is the one after the latest entry, which is on top.
   const last = lines[0];
-  const sum = (f: (l: Line) => number) => round2(lines.reduce((s, l) => s + f(l), 0));
   const columns: BookColumn<Line>[] = full
     ? [
         { key: 'sn', label: 'SN', width: 52, render: (_l, i) => <Text className="text-[12.5px] text-gray-500">{lines.length - i}</Text> },
@@ -1796,9 +1792,7 @@ function VehicleEntries({
             </View>
           ),
         },
-        { key: 'balance', label: 'Balance', width: 120, align: 'right', render: (l) => fig(l.part.billed, '#111827') },
-        { key: 'paid', label: 'Total Paid', width: 110, align: 'right', render: (l) => fig(l.part.paid, MONEY.out.text) },
-        { key: 'received', label: 'Total Received', width: 120, align: 'right', render: (l) => fig(l.part.received, MONEY.in.text) },
+        { key: 'amount', label: 'Amount', width: 120, align: 'right', render: amount },
         { key: 'payable', label: 'Payable', width: 110, align: 'right', render: (l) => fig(l.payable, MONEY.out.text) },
         { key: 'receivable', label: 'Receivable', width: 110, align: 'right', render: (l) => fig(l.receivable, MONEY.in.text) },
         actions,
@@ -1821,7 +1815,7 @@ function VehicleEntries({
           label: 'Amount',
           width: 110,
           align: 'right',
-          render: (l) => fig(l.part.billed || l.part.paid || l.part.received, l.part.billed ? '#111827' : l.part.paid ? MONEY.out.text : MONEY.in.text),
+          render: amount,
         },
         { key: 'left', label: 'Left', width: 110, align: 'right', render: (l) => (l.payable ? fig(l.payable, MONEY.out.text) : fig(l.receivable, MONEY.in.text)) },
         actions,
@@ -1838,9 +1832,6 @@ function VehicleEntries({
         label: `${lines.length} ${lines.length === 1 ? 'entry' : 'entries'} · Total`,
         cells: full
           ? {
-              balance: fig(sum((l) => l.part.billed), '#111827'),
-              paid: fig(sum((l) => l.part.paid), MONEY.out.text),
-              received: fig(sum((l) => l.part.received), MONEY.in.text),
               payable: fig(last?.payable ?? 0, MONEY.out.text),
               receivable: fig(last?.receivable ?? 0, MONEY.in.text),
             }
