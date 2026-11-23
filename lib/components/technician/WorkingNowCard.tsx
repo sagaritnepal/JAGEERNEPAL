@@ -93,10 +93,6 @@ function WorkingJobRow({ job, wide }: { job: ServiceRequest; wide: boolean }) {
           </Text>
         )}
       </View>
-      <View className="flex-row items-center gap-1">
-        {wide && <Text className="text-[12.5px] font-semibold text-blue-700">Open job</Text>}
-        <Ionicons name="chevron-forward" size={16} color={wide ? '#1D4ED8' : '#9CA3AF'} />
-      </View>
     </Pressable>
   );
 }

@@ -492,8 +492,8 @@ export function TechnicianDashboardView({
                 </View>
               </Rise>
               <Rise index={next()}>{kpiTiles}</Rise>
-              {performanceSection ? <Rise index={next()}>{performanceSection}</Rise> : null}
               {monthlySection ? <Rise index={next()}>{monthlySection}</Rise> : null}
+              {performanceSection ? <Rise index={next()}>{performanceSection}</Rise> : null}
               <Rise index={next()}>
                 <View style={{ flexDirection: split ? 'row' : 'column', gap: 16, alignItems: split ? 'flex-start' : 'stretch' }}>
                   <View style={{ flex: split ? 2 : undefined, minWidth: 0 }}>{chartCard}</View>
@@ -529,8 +529,8 @@ export function TechnicianDashboardView({
           <View style={{ paddingHorizontal: 16, paddingTop: 8, gap: 12 }}>
             <Text className="text-center text-[13px] font-medium text-gray-500">{rangeText}</Text>
             <Rise index={next()}>{kpiTiles}</Rise>
-            {performanceSection ? <Rise index={next()}>{performanceSection}</Rise> : null}
             {monthlySection ? <Rise index={next()}>{monthlySection}</Rise> : null}
+            {performanceSection ? <Rise index={next()}>{performanceSection}</Rise> : null}
             <Rise index={next()}>{chartCard}</Rise>
             <Rise index={next()}>{listCard}</Rise>
           </View>
