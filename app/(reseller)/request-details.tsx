@@ -102,6 +102,7 @@ function ResellerRequestDetails() {
   const [photos, setPhotos] = useState<(string | null)[]>(Array(PHOTO_SLOTS).fill(null));
   const [notes, setNotes] = useState('');
   const [quotedPrice, setQuotedPrice] = useState('');
+  const [repeatOfId, setRepeatOfId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   // Set the instant Submit is pressed - the state above only updates on the next render, so a quick
   // double tap could otherwise create the same job twice.
@@ -132,8 +133,22 @@ function ResellerRequestDetails() {
     setNotes(editRequest.description ?? '');
     setQuotedPrice(editRequest.quoted_price != null ? String(Number(editRequest.quoted_price)) : '');
     setExistingPhotos(editRequest.photo_urls ?? []);
+    setRepeatOfId(editRequest.repeat_of_request_id ?? null);
     setHydrated(true);
   }, [editRequest, hydrated]);
+
+  // This customer's own finished jobs, so a genuine return trip can be linked by hand instead of
+  // guessed from timing (see migration 0113). Only fetched once there's a customer identity to match.
+  const { data: customerHistory } = useSupabaseQuery('service_requests', {
+    filters: userId ? { reseller_id: userId, status: 'resolved' } : {},
+    enabled: !!userId && (!!customerId || customerPhone.trim().length === 10),
+  });
+  const repeatCandidates = (customerHistory ?? []).filter(
+    (r) =>
+      r.id !== editId &&
+      ((customerId && r.customer_id === customerId) || (customerPhone.trim() && r.customer_phone === customerPhone.trim()))
+  );
+  const validRepeatOfId = repeatCandidates.some((r) => r.id === repeatOfId) ? repeatOfId : null;
 
   function handleSelectCustomer(customer: Customer) {
     setCustomerId(customer.id);
@@ -284,6 +299,7 @@ function ResellerRequestDetails() {
             scheduled_time: time.trim() || null,
             location_data,
             photo_urls: [...existingPhotos, ...photoUrls],
+            repeat_of_request_id: validRepeatOfId,
           } as any,
         });
         saved = true;
@@ -339,6 +355,7 @@ function ResellerRequestDetails() {
         scheduled_time: time.trim() || null,
         location_data: { ...coords, address: address.trim() },
         photo_urls: photoUrls,
+        repeat_of_request_id: validRepeatOfId,
       });
 
       saved = true;
@@ -521,6 +538,39 @@ function ResellerRequestDetails() {
               maxLength={10}
               className="rounded-lg border border-gray-300 bg-white px-4 py-3 text-base"
             />
+
+            {repeatCandidates.length > 0 && (
+              <View className="mt-3.5 border-t border-gray-100 pt-3.5">
+                <FieldLabel>Repeat visit?</FieldLabel>
+                <Text className="mb-2 text-xs leading-[17px] text-gray-500">
+                  {customerName.trim() || 'This customer'} has {repeatCandidates.length} earlier finished{' '}
+                  {repeatCandidates.length === 1 ? 'job' : 'jobs'}. Link this one if it's a return trip for one of them.
+                </Text>
+                <View style={{ gap: 6 }}>
+                  {repeatCandidates.slice(0, 5).map((r) => {
+                    const on = validRepeatOfId === r.id;
+                    return (
+                      <Pressable
+                        key={r.id}
+                        onPress={() => setRepeatOfId(on ? null : r.id)}
+                        className="flex-row items-center gap-2.5 rounded-lg border px-3 py-2.5"
+                        style={{ borderColor: on ? '#3b82f6' : '#E5E7EB', backgroundColor: on ? '#eff6ff' : '#fff' }}
+                      >
+                        <Ionicons name={on ? 'radio-button-on' : 'radio-button-off'} size={17} color={on ? '#2563EB' : '#9CA3AF'} />
+                        <View className="flex-1">
+                          <Text className="text-[13px] font-semibold text-gray-900" numberOfLines={1}>
+                            {r.issue_type}
+                          </Text>
+                          <Text className="text-[11.5px] text-gray-500">
+                            {ticketLabel(r.ticket_no)} · {new Date(r.scheduled_date ?? r.created_at).toLocaleDateString()}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
           </FormSection>
 
           <FormSection title="Location" subtitle="Seen by the technician before accepting">

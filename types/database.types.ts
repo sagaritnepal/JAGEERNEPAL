@@ -192,6 +192,9 @@ export interface ServiceRequest {
    * database gives at creation and never changes. Null until that migration
    * has been run. Show it with ticketLabel(). */
   ticket_no: number | null;
+  /** Set by hand when the job is created if it's really a return trip for an earlier completed job
+   * (migration 0113) - never inferred from timing. Null for an ordinary job. */
+  repeat_of_request_id?: string | null;
   created_at: string;
   updated_at: string;
   /** Offered to the whole team: any of this reseller's employees can take
