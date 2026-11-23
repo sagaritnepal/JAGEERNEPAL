@@ -140,6 +140,7 @@ export function PopupCard({
   headerRight,
   closeOnOutside = false,
   hideClose = false,
+  footer,
   children,
 }: {
   title: string;
@@ -151,6 +152,9 @@ export function PopupCard({
   hideClose?: boolean;
   /** A click on the dimmed area closes the card - for one with nothing typed in it. */
   closeOnOutside?: boolean;
+  /** Pinned below the scrolling content, outside it - for Save/Cancel buttons, so a field's own open
+   * dropdown (e.g. PartyTypeField) can never sit over them. Omit to put buttons in `children` as before. */
+  footer?: ReactNode;
   children: ReactNode;
 }) {
   // The card is on screen exactly while it is mounted, so Back (the browser's; Android's closes the Modal) closes it
@@ -180,9 +184,10 @@ export function PopupCard({
                 </Pressable>
               )}
             </View>
-            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, gap: 14 }}>
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, gap: 14 }} style={{ flexGrow: 0, flexShrink: 1 }}>
               {children}
             </ScrollView>
+            {footer && <View className="border-t border-gray-100 bg-white px-5 py-4">{footer}</View>}
           </View>
         </View>
       </KeyboardAvoidingView>

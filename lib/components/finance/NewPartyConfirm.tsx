@@ -83,7 +83,14 @@ function NewPartyDialog({
   };
   return (
     // No cross, but a click outside, Esc and Cancel all go back: the name is dropped and nothing is saved. Only Add saves.
-    <PopupCard title={`Add new ${kind}`} onClose={cancel} maxWidth={460} hideClose closeOnOutside>
+    <PopupCard
+      title={`Add new ${kind}`}
+      onClose={cancel}
+      maxWidth={460}
+      hideClose
+      closeOnOutside
+      footer={<FormActions onCancel={cancel} onSave={add} saveLabel={`Add ${kind}`} />}
+    >
       <Text className="text-[13px] text-gray-500">
         This {kind} is not saved yet. Check the name - fix it if it needs it - and the Ledger type it belongs to, then add.
       </Text>
@@ -155,7 +162,6 @@ function NewPartyDialog({
         </Field>
       )}
       <PartyTypeField ownerId={userId} value={partyTypeId} onChange={setPicked} onCreated={(id) => madeTypes.current.push(id)} />
-      <FormActions onCancel={cancel} onSave={add} saveLabel={`Add ${kind}`} />
     </PopupCard>
   );
 }
