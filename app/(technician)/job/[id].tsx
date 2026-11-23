@@ -90,6 +90,30 @@ function StageStrip({ status, paid, footer }: { status: RequestStatus; paid: boo
   );
 }
 
+/** One row of the Progress card's date timeline (Created / Appointment / Accepted / Completed) - an
+ * icon chip, its content, and an optional trailing value (the live elapsed badge). */
+function TimelineRow({
+  icon,
+  children,
+  trailing,
+  alignTop,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  children: React.ReactNode;
+  trailing?: React.ReactNode;
+  alignTop?: boolean;
+}) {
+  return (
+    <View className={`flex-row gap-2.5 ${alignTop ? 'items-start' : 'items-center'}`}>
+      <View className="h-7 w-7 items-center justify-center rounded-full bg-gray-100">
+        <Ionicons name={icon} size={14} color="#6B7280" />
+      </View>
+      <View className="flex-1">{children}</View>
+      {trailing}
+    </View>
+  );
+}
+
 interface PartRow {
   name: string;
   quantity: string;
@@ -363,32 +387,36 @@ function JobCard({ id }: { id: string }) {
     </>
   );
 
-  // The Appointment card folded into Progress - the schedule and where to go matter from the moment
-  // the job is accepted, not just while it's in progress, so this part of the footer isn't gated on
-  // status the way the accepted/elapsed block below it is.
+  // The Appointment card folded into Progress, as one timeline of dates: when the job was created,
+  // when/where the visit is scheduled, when it was accepted, and (once it happens) when it was
+  // completed - each a plain icon row, so this reads as one list instead of a schedule block plus a
+  // separately-styled "Accepted" callout.
   const hasSchedule = !!(request.scheduled_date || request.scheduled_time);
   const hasLocation = !!(
     request.location_data?.address ||
     (request.location_data?.latitude != null && request.location_data?.longitude != null)
   );
-  const appointmentRows = hasAccepted && (hasSchedule || hasLocation) && (
-    <View style={{ gap: 8 }}>
+
+  const progressFooter = hasAccepted ? (
+    <View style={{ gap: 10 }}>
+      <TimelineRow icon="add-circle-outline">
+        <Text className="text-sm text-gray-700">
+          <Text className="font-semibold text-gray-900">Created: </Text>
+          {formatTimestamp(request.created_at)}
+        </Text>
+      </TimelineRow>
+
       {hasSchedule && (
-        <View className="flex-row items-center gap-2.5">
-          <View className="h-7 w-7 items-center justify-center rounded-full bg-gray-100">
-            <Ionicons name="time-outline" size={14} color="#6B7280" />
-          </View>
-          <Text className="flex-1 text-sm font-semibold text-gray-900">
+        <TimelineRow icon="time-outline">
+          <Text className="text-sm font-semibold text-gray-900">
             {formatScheduledWhen(request.scheduled_date, request.scheduled_time)}
           </Text>
-        </View>
+        </TimelineRow>
       )}
+
       {hasLocation && (
-        <View className="flex-row items-start gap-2.5">
-          <View className="h-7 w-7 items-center justify-center rounded-full bg-gray-100">
-            <Ionicons name="location-outline" size={14} color="#6B7280" />
-          </View>
-          <View className="flex-1">
+        <TimelineRow icon="location-outline" alignTop>
+          <>
             {!!request.location_data?.address && (
               <Text className="text-sm text-gray-700">{request.location_data.address}</Text>
             )}
@@ -404,43 +432,42 @@ function JobCard({ id }: { id: string }) {
                 <Ionicons name="arrow-forward" size={11} color="#2563EB" />
               </Pressable>
             )}
-          </View>
-        </View>
+          </>
+        </TimelineRow>
       )}
-    </View>
-  );
 
-  // In progress has nothing to add beyond "Work in progress", which the strip above already says -
-  // so its one real fact (when it was accepted, and how long ago) sits right in the strip's own
-  // footer instead of a second card underneath repeating the stage name.
-  const acceptedInfo =
-    request.status === 'in_progress' && jobCard?.started_at ? (
-      <>
-        <View className="flex-row items-center justify-between rounded-lg bg-blue-50 px-3 py-2.5">
-          <Text className="text-xs text-blue-900">
-            <Text className="font-semibold">Accepted: </Text>
+      {!!jobCard?.started_at && (
+        <TimelineRow
+          icon="checkmark-circle-outline"
+          trailing={
+            request.status === 'in_progress' ? (
+              <Text className="text-xs font-bold text-blue-700">
+                {formatDuration(now - new Date(jobCard.started_at).getTime())} elapsed
+              </Text>
+            ) : undefined
+          }
+        >
+          <Text className="text-sm text-gray-700">
+            <Text className="font-semibold text-gray-900">Accepted: </Text>
             {formatTimestamp(jobCard.started_at)}
           </Text>
-          <Text className="text-xs font-bold text-blue-700">
-            {formatDuration(now - new Date(jobCard.started_at).getTime())} elapsed
-          </Text>
-        </View>
-        {request.quoted_price != null && (
-          <Text className="mt-2 text-xs text-gray-500">
-            Quoted price: NPR {Number(request.quoted_price).toLocaleString()}
-          </Text>
-        )}
-      </>
-    ) : undefined;
+        </TimelineRow>
+      )}
 
-  const progressFooter =
-    appointmentRows || acceptedInfo ? (
-      <>
-        {appointmentRows}
-        {!!appointmentRows && !!acceptedInfo && <View className="my-3 border-t border-gray-100" />}
-        {acceptedInfo}
-      </>
-    ) : undefined;
+      {!!jobCard?.completed_at && (
+        <TimelineRow icon="checkmark-done-circle-outline">
+          <Text className="text-sm text-gray-700">
+            <Text className="font-semibold text-gray-900">Completed: </Text>
+            {formatTimestamp(jobCard.completed_at)}
+          </Text>
+        </TimelineRow>
+      )}
+
+      {request.status === 'in_progress' && request.quoted_price != null && (
+        <Text className="text-xs text-gray-500">Quoted price: NPR {Number(request.quoted_price).toLocaleString()}</Text>
+      )}
+    </View>
+  ) : undefined;
 
   const stageStrip = (
     <>
