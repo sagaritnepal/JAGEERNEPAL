@@ -26,12 +26,12 @@ import { WEB_SIDEBAR_MIN_WIDTH } from '../../lib/components/web/WebSidebarShell'
 import { LocationPickerModal, type Coords } from '../../lib/components/LocationPickerModal';
 import { MapPreview } from '../../lib/components/MapPreview';
 import { showAlert, getErrorMessage } from '../../lib/utils/alert';
+import { askSave } from '../../lib/utils/askSave';
 import { resizeImageForUpload } from '../../lib/utils/resizeImage';
 import { returnPathOr } from '../../lib/utils/returnPath';
 import { ServiceDropdown } from '../../lib/components/ServiceDropdown';
 import { usePhoneContacts } from '../../lib/hooks/usePhoneContacts';
 import { SuggestInput, type SuggestOption } from '../../lib/components/finance/SuggestInput';
-import { useConfirmNewParty, withType } from '../../lib/components/finance/NewPartyConfirm';
 import { buildCustomerSuggestions } from '../../lib/utils/customerSuggestions';
 import { isValidPhone10 } from '../../lib/utils/phone';
 import { parseAmount, digitsInput } from '../../lib/utils/number';
@@ -80,9 +80,6 @@ function ResellerRequestDetails() {
   const createRequest = useSupabaseInsert('service_requests');
   const createCustomer = useSupabaseInsert('customers');
   const updateCustomer = useSupabaseUpdate('customers');
-  // A typed name that isn't a saved customer is checked here before it's saved - same confirm-first
-  // flow a Sale bill uses for a new customer/vendor (see NewPartyConfirm.tsx).
-  const { askNewParty, dialog: newPartyDialog } = useConfirmNewParty();
   const { data: myCustomers } = useSupabaseQuery('customers', {
     filters: userId ? { owner_id: userId } : {},
     orderBy: { column: 'name' },
@@ -214,96 +211,27 @@ function ResellerRequestDetails() {
       showAlert('Check the phone number', "Enter the customer's 10-digit phone number, or leave it blank.");
       return;
     }
+    if (!date.trim()) {
+      showAlert('Add a date', 'Let us know when you need this service.');
+      return;
+    }
+    if (!address.trim() && !coords) {
+      showAlert('Add a location', 'Use your current location or type an address.');
+      return;
+    }
+    const price = parseAmount(quotedPrice);
+    if (quotedPrice.trim() && (price == null || price <= 0)) {
+      showAlert('Invalid price', 'Enter a valid price in NPR, or leave it blank if you don\'t know it yet.');
+      return;
+    }
+    // Service is optional now - fall back to a placeholder so issue_type (not-null in the
+    // database) still gets a value, and still parses back into category/action on edit.
+    const issueType = service ? `${category} - ${action}` : 'General - Not specified';
 
     submittingRef.current = true;
     setSubmitting(true);
     let saved = false;
     try {
-      // Who this is for is resolved first - a name that isn't a saved customer is confirmed (name,
-      // phone and optionally a location, in one popup) here, same as a Sale bill's new customer/
-      // vendor (see NewPartyConfirm.tsx), before the job's own date/location are checked below - so a
-      // location typed into that popup already covers the location check that follows.
-      let linkedCustomerId: string | null = customerId;
-      let finalCustomerName = customerName.trim();
-      let finalCustomerPhone = customerPhone.trim();
-      let finalAddress = address.trim();
-      let finalCoords = coords;
-
-      if (!editRequest) {
-        if (linkedCustomerId) {
-          try {
-            await updateCustomer.mutateAsync({
-              id: linkedCustomerId,
-              values: {
-                name: finalCustomerName,
-                phone: finalCustomerPhone || null,
-                address: finalAddress || null,
-                latitude: finalCoords?.latitude ?? null,
-                longitude: finalCoords?.longitude ?? null,
-              },
-            });
-          } catch {
-            // The booking still goes ahead linked to the existing record even if this edit didn't save.
-          }
-        } else {
-          const checked = await askNewParty({
-            name: finalCustomerName,
-            kind: 'customer',
-            askPhone: true,
-            phone: finalCustomerPhone || null,
-            askAddress: true,
-            address: finalAddress || null,
-          });
-          if (!checked) return; // Cancelled: back to the form, nothing saved.
-          finalCustomerName = checked.name;
-          finalCustomerPhone = checked.phone ?? finalCustomerPhone;
-          setCustomerName(finalCustomerName);
-          if (checked.phone) setCustomerPhone(checked.phone);
-          if (checked.address && !finalAddress) {
-            finalAddress = checked.address;
-            setAddress(checked.address);
-          }
-          try {
-            const created = await createCustomer.mutateAsync({
-              owner_id: userId,
-              name: finalCustomerName,
-              phone: finalCustomerPhone || null,
-              address: finalAddress || null,
-              latitude: finalCoords?.latitude ?? null,
-              longitude: finalCoords?.longitude ?? null,
-              ...withType(checked),
-            });
-            linkedCustomerId = created.id;
-          } catch {
-            // Most likely a duplicate-phone conflict (customers_owner_phone_idx)
-            // against a record that isn't in myCustomers' current cache yet -
-            // link to it by phone instead of leaving the booking unlinked from
-            // the contact book.
-            const existing = finalCustomerPhone
-              ? (myCustomers ?? []).find((c) => c.phone === finalCustomerPhone)
-              : undefined;
-            linkedCustomerId = existing?.id ?? null;
-          }
-        }
-      }
-
-      if (!date.trim()) {
-        showAlert('Add a date', 'Let us know when you need this service.');
-        return;
-      }
-      if (!finalAddress && !finalCoords) {
-        showAlert('Add a location', 'Use your current location or type an address.');
-        return;
-      }
-      const price = parseAmount(quotedPrice);
-      if (quotedPrice.trim() && (price == null || price <= 0)) {
-        showAlert('Invalid price', 'Enter a valid price in NPR, or leave it blank if you don\'t know it yet.');
-        return;
-      }
-      // Service is optional now - fall back to a placeholder so issue_type (not-null in the
-      // database) still gets a value, and still parses back into category/action on edit.
-      const issueType = service ? `${category} - ${action}` : 'General - Not specified';
-
       const photoUrls: string[] = [];
       for (let i = 0; i < photos.length; i++) {
         const uri = photos[i];
@@ -312,13 +240,13 @@ function ResellerRequestDetails() {
 
       if (editRequest) {
         // Saves to this job only. The saved customer it is linked to is left as it is (see above).
-        const addressChanged = finalAddress !== (editRequest.location_data?.address ?? '').trim();
+        const addressChanged = address.trim() !== (editRequest.location_data?.address ?? '').trim();
         const pinMoved =
-          (finalCoords?.latitude ?? null) !== (editRequest.location_data?.latitude ?? null) ||
-          (finalCoords?.longitude ?? null) !== (editRequest.location_data?.longitude ?? null);
+          (coords?.latitude ?? null) !== (editRequest.location_data?.latitude ?? null) ||
+          (coords?.longitude ?? null) !== (editRequest.location_data?.longitude ?? null);
         // A changed address no longer matches the saved map pin - drop it rather than send the technician to the old place.
         const location_data =
-          addressChanged && !pinMoved ? { address: finalAddress } : { ...finalCoords, address: finalAddress };
+          addressChanged && !pinMoved ? { address: address.trim() } : { ...coords, address: address.trim() };
         const serviceChanged = !!service && (
           service.category !== initialService.current?.category || service.action !== initialService.current?.action
         );
@@ -326,11 +254,11 @@ function ResellerRequestDetails() {
           id: editRequest.id,
           values: {
             customer_id: customerId,
-            customer_name: finalCustomerName,
-            customer_phone: finalCustomerPhone || null,
-            contact_person_name: finalCustomerName,
-            contact_person_phone: finalCustomerPhone || null,
-            company_name: (companySameAsCustomer ? finalCustomerName : companyName).trim() || null,
+            customer_name: customerName.trim(),
+            customer_phone: customerPhone.trim() || null,
+            contact_person_name: customerName.trim(),
+            contact_person_phone: customerPhone.trim() || null,
+            company_name: (companySameAsCustomer ? customerName : companyName).trim() || null,
             issue_type: serviceChanged ? issueType : editRequest.issue_type,
             description: notes.trim() || null,
             quoted_price: price,
@@ -347,23 +275,53 @@ function ResellerRequestDetails() {
         return;
       }
 
+      // Keep the customer directory in sync: update the saved record if one was picked, or save a
+      // brand new one so it's ready to reuse next time. Never blocks the booking if it fails - a
+      // name that was already added via the "+ Add as new customer" row in the field above just
+      // updates that same record here.
+      let linkedCustomerId: string | null = customerId;
+      try {
+        const customerValues = {
+          name: customerName.trim(),
+          phone: customerPhone.trim() || null,
+          address: address.trim() || null,
+          latitude: coords?.latitude ?? null,
+          longitude: coords?.longitude ?? null,
+        };
+        if (linkedCustomerId) {
+          await updateCustomer.mutateAsync({ id: linkedCustomerId, values: customerValues });
+        } else {
+          const created = await createCustomer.mutateAsync({ owner_id: userId, ...customerValues });
+          linkedCustomerId = created.id;
+        }
+      } catch {
+        // Most likely a duplicate-phone conflict (customers_owner_phone_idx)
+        // against a record that isn't in myCustomers' current cache yet -
+        // link to it by phone instead of leaving the booking unlinked from
+        // the contact book.
+        const existing = customerPhone.trim()
+          ? (myCustomers ?? []).find((c) => c.phone === customerPhone.trim())
+          : undefined;
+        linkedCustomerId = existing?.id ?? null;
+      }
+
       await createRequest.mutateAsync({
         client_id: userId,
         reseller_id: userId,
         customer_id: linkedCustomerId,
         origin: 'reseller',
-        customer_name: finalCustomerName,
-        customer_phone: finalCustomerPhone || null,
-        contact_person_name: finalCustomerName,
-        contact_person_phone: finalCustomerPhone || null,
-        company_name: (companySameAsCustomer ? finalCustomerName : companyName).trim() || null,
+        customer_name: customerName.trim(),
+        customer_phone: customerPhone.trim() || null,
+        contact_person_name: customerName.trim(),
+        contact_person_phone: customerPhone.trim() || null,
+        company_name: (companySameAsCustomer ? customerName : companyName).trim() || null,
         issue_type: issueType,
         description: notes.trim() || null,
         status: 'pending',
         quoted_price: price,
         scheduled_date: date.trim(),
         scheduled_time: time.trim() || null,
-        location_data: { ...finalCoords, address: finalAddress },
+        location_data: { ...coords, address: address.trim() },
         photo_urls: photoUrls,
         repeat_of_request_id: validRepeatOfId,
       });
@@ -393,71 +351,50 @@ function ResellerRequestDetails() {
   const missingText = missing.join(', ').replace(/^./, (ch) => ch.toUpperCase());
 
   // Tapping the Customer name box drops its matches right under it, instead of a separate popup -
-  // picking one below fills name, phone and (for a saved customer) their location.
+  // picking one below fills name, phone and (for a saved customer) their location. A name that
+  // matches nothing gets its own row to add it as a new customer right there - the same "+ Add ... as
+  // new ledger" row a Sale bill's own customer/vendor field already uses.
   const customerMatches = buildCustomerSuggestions(myCustomers ?? [], phoneContacts.contacts, customerName, undefined, true);
-  const customerOptions: SuggestOption[] = customerMatches.map((s) => ({
-    key: s.key,
-    label: s.name,
-    sub: s.phone,
-    hint: s.customer ? undefined : 'Contact',
-  }));
-  function pickCustomerOption(option: SuggestOption) {
+  const typedCustomerName = customerName.trim();
+  const customerNameIsNew =
+    !!typedCustomerName &&
+    !customerId &&
+    !(myCustomers ?? []).some((c) => c.name.trim().toLowerCase() === typedCustomerName.toLowerCase());
+  const customerOptions: SuggestOption[] = [
+    ...customerMatches.map((s) => ({
+      key: s.key,
+      label: s.name,
+      sub: s.phone,
+      hint: s.customer ? undefined : 'Contact',
+    })),
+    ...(customerNameIsNew ? [{ key: '__new_customer__', label: `Add "${typedCustomerName}" as new customer`, kind: 'add' as const }] : []),
+  ];
+  async function pickCustomerOption(option: SuggestOption) {
+    if (option.key === '__new_customer__') {
+      const name = typedCustomerName;
+      if (!userId || !name) return;
+      if (!(await askSave('Add new customer?', `"${name}" is not in your saved list yet. Save them as a new customer?`))) {
+        return;
+      }
+      try {
+        const created = await createCustomer.mutateAsync({ owner_id: userId, name, phone: customerPhone.trim() || null });
+        setCustomerName(created.name);
+        if (created.phone) setCustomerPhone(created.phone);
+        setCustomerId(created.id);
+      } catch (err) {
+        showAlert('Could not add customer', getErrorMessage(err));
+      }
+      return;
+    }
     const match = customerMatches.find((s) => s.key === option.key);
     if (match?.customer) {
       handleSelectCustomer(match.customer);
       return;
     }
-    // A phone contact, not a saved customer yet - leaving the field confirms adding them (below).
+    // A phone contact, not a saved customer yet - the "+ Add" row above offers to save them too.
     setCustomerName(match?.name ?? option.label);
     setCustomerPhone(match?.phone ?? '');
     setCustomerId(null);
-  }
-
-  // Right where the name is typed, not held back for Submit: leaving the field with a name that
-  // isn't a saved customer confirms adding them immediately (name, phone, optional location, in the
-  // same popup a Sale bill uses - see NewPartyConfirm.tsx), so the request itself already has a
-  // resolved customer by the time it's submitted. Edit mode never changes which customer a job is
-  // linked to, so this never runs there.
-  async function confirmNewCustomerIfNeeded() {
-    if (editRequest || customerId || !userId) return;
-    const typed = customerName.trim();
-    if (!typed) return;
-    const existing = (myCustomers ?? []).find((c) => c.name.trim().toLowerCase() === typed.toLowerCase());
-    if (existing) {
-      setCustomerId(existing.id);
-      if (!customerPhone.trim() && existing.phone) setCustomerPhone(existing.phone);
-      return;
-    }
-    const checked = await askNewParty({
-      name: typed,
-      kind: 'customer',
-      askPhone: true,
-      phone: customerPhone.trim() || null,
-      askAddress: true,
-      address: address.trim() || null,
-    });
-    if (!checked) return;
-    setCustomerName(checked.name);
-    if (checked.phone) setCustomerPhone(checked.phone);
-    if (checked.address && !address.trim()) setAddress(checked.address);
-    try {
-      const created = await createCustomer.mutateAsync({
-        owner_id: userId,
-        name: checked.name,
-        phone: checked.phone || null,
-        address: checked.address || address.trim() || null,
-        latitude: coords?.latitude ?? null,
-        longitude: coords?.longitude ?? null,
-        ...withType(checked),
-      });
-      setCustomerId(created.id);
-    } catch (err) {
-      // Most likely a duplicate-phone conflict (customers_owner_phone_idx) against a record that
-      // isn't in myCustomers' current cache yet - link to it instead of leaving this unresolved.
-      const existingByPhone = checked.phone ? (myCustomers ?? []).find((c) => c.phone === checked.phone) : undefined;
-      if (existingByPhone) setCustomerId(existingByPhone.id);
-      else showAlert('Could not add customer', getErrorMessage(err));
-    }
   }
 
   function cancel() {
@@ -558,12 +495,7 @@ function ResellerRequestDetails() {
                 phoneContacts.request();
                 setCustomerListOpen(true);
               }}
-              onBlur={() =>
-                setTimeout(() => {
-                  setCustomerListOpen(false);
-                  confirmNewCustomerIfNeeded();
-                }, 150)
-              }
+              onBlur={() => setTimeout(() => setCustomerListOpen(false), 150)}
               options={customerOptions}
               onSelectOption={pickCustomerOption}
               showWhenEmpty
@@ -769,7 +701,6 @@ function ResellerRequestDetails() {
         }}
         onClose={() => setShowLocationPicker(false)}
       />
-      {newPartyDialog}
     </View>
   );
 }
