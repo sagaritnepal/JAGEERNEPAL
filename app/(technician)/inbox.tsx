@@ -302,9 +302,10 @@ export default function TechnicianInbox() {
   const newJobs = useMemo(() => (jobs ?? []).filter((j) => j.status === 'assigned'), [jobs]);
   const openJobs = useOpenTeamJobs(userId);
   const activeJobs = useMemo(() => (jobs ?? []).filter((j) => j.status === 'in_progress'), [jobs]);
-  // One job at a time: another can only be started once this one is finished,
-  // or on hold with the reseller's approval (migration 0095).
-  const busyJob = useMemo(() => activeJobs.find((j) => j.hold_status !== 'on_hold'), [activeJobs]);
+  // One job at a time - but asking for a hold (reason given, no approval needed) frees the technician
+  // up immediately, same as finishing the job. The reseller still sees the request and decides it;
+  // it just no longer keeps this job pinned as "current" while that decision is pending.
+  const busyJob = useMemo(() => activeJobs.find((j) => j.hold_status === 'none'), [activeJobs]);
   const averageRating = useMemo(() => {
     if (!reviews || reviews.length === 0) return null;
     return reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
@@ -414,8 +415,7 @@ export default function TechnicianInbox() {
         <View className="mb-3 flex-row items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
           <Ionicons name="pause-circle-outline" size={18} color="#B45309" />
           <Text className="flex-1 text-xs leading-[17px] text-amber-900">
-            You are working on "{busyJob.issue_type}". To take another job, finish it or request a hold and get your
-            reseller's approval first.
+            You are working on "{busyJob.issue_type}". To take another job, finish it or request a hold on it first.
           </Text>
         </View>
       )}

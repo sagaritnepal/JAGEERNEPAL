@@ -495,8 +495,12 @@ export default function TechnicianWorksheet() {
   const me: Spot | null = useMemo(() => (myLat != null && myLng != null ? { latitude: myLat, longitude: myLng } : null), [myLat, myLng]);
   const unassigned = useUnassignedTeamJobs(isStaff ? current?.reseller_id : undefined);
 
-  const working = useMemo(() => (mine ?? []).filter((j) => j.status === 'in_progress' && j.hold_status !== 'on_hold'), [mine]);
+  // A hold only has to be asked for, not approved, to free the technician up for other work - the
+  // reseller still sees and decides the request, but it no longer keeps this job pinned as "current"
+  // while they wait. Only a job with no hold in play at all still counts as busy.
+  const working = useMemo(() => (mine ?? []).filter((j) => j.status === 'in_progress' && j.hold_status === 'none'), [mine]);
   const onHold = useMemo(() => (mine ?? []).filter((j) => j.status === 'in_progress' && j.hold_status === 'on_hold'), [mine]);
+  const holdRequested = useMemo(() => (mine ?? []).filter((j) => j.status === 'in_progress' && j.hold_status === 'requested'), [mine]);
   const offered = useMemo(() => (mine ?? []).filter((j) => j.status === 'assigned'), [mine]);
   const busy = working.length > 0;
 
@@ -586,6 +590,16 @@ export default function TechnicianWorksheet() {
             ))}
           </View>
         )}
+
+        {holdRequested.map((j) => (
+          <Pressable key={j.id} onPress={() => open(j)} accessibilityRole="button" className="flex-row items-center rounded-2xl bg-white px-3.5" style={{ minHeight: 56, gap: 10 }}>
+            <Ionicons name="hourglass-outline" size={22} color="#D97706" />
+            <Text className="flex-1 text-[14px] font-semibold text-gray-800" numberOfLines={1}>
+              Hold requested: {j.issue_type}
+            </Text>
+            <Ionicons name="chevron-forward" size={16} color="#6B7280" />
+          </Pressable>
+        ))}
 
         {onHold.map((j) => (
           <Pressable key={j.id} onPress={() => open(j)} accessibilityRole="button" className="flex-row items-center rounded-2xl bg-white px-3.5" style={{ minHeight: 56, gap: 10 }}>
