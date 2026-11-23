@@ -14,8 +14,8 @@ const TABULAR: TextStyle = { fontVariant: ['tabular-nums'] };
 /**
  * The one balance a party has, in words: the amount, then whether it is
  * "To receive" (they owe you) or "To pay" (you owe them). Someone with money
- * running both ways gets a single netted figure plus a plain note saying so,
- * instead of separate receive / pay columns that each tell half the story.
+ * running both ways gets a single netted figure, instead of separate receive /
+ * pay columns that each tell half the story.
  */
 export function PartyBalance({
   position,
@@ -46,7 +46,6 @@ export function PartyBalance({
           )}
         </>
       )}
-      {position.bothLedgers && <Text className="mt-0.5 text-[10.5px] text-gray-500">Net of both ledgers</Text>}
     </View>
   );
 }
