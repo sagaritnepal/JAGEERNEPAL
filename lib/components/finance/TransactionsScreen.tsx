@@ -37,7 +37,6 @@ import { KeyInput } from './KeyInput';
 import { useConfirmSave } from './ConfirmSave';
 import { TransactionsBook } from './TransactionsBook';
 import { tidyName } from '../../utils/nameCaps';
-import { askSave } from '../../utils/askSave';
 import { BookTable, type BookColumn } from './BookKit';
 import { FINANCE_ENTRY_ACCENT, FINANCE_ENTRY_SHADOW } from './entryTheme';
 import { SuggestInput, type SuggestOption } from './SuggestInput';
@@ -1835,13 +1834,10 @@ function TransactionForm({
                     options={vendorOptions}
                     onSelectOption={async (opt, via) => {
                       if (opt.key === '__new__') {
-                        const name = partyName.trim();
-                        if (!(await askSave('Add new ledger?', `"${name}" is not in your ledger yet. Save it as a new ledger?`))) {
-                          setPartyName('');
-                          return;
-                        }
-                        await handleSelectPartyNew(name, null);
-                        if (via !== 'tab') billNoRef.current?.focus();
+                        // The full name/phone/Ledger-type popup, not just a Yes/No - same as picking
+                        // an unsaved phone contact below.
+                        const addedOk = await handleSelectPartyNew(partyName.trim(), null, undefined, true);
+                        if (addedOk && via !== 'tab') billNoRef.current?.focus();
                         return;
                       }
                       const s = vendorSuggestions.find((x) => x.key === opt.key);

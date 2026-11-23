@@ -26,12 +26,12 @@ import { WEB_SIDEBAR_MIN_WIDTH } from '../../lib/components/web/WebSidebarShell'
 import { LocationPickerModal, type Coords } from '../../lib/components/LocationPickerModal';
 import { MapPreview } from '../../lib/components/MapPreview';
 import { showAlert, getErrorMessage } from '../../lib/utils/alert';
-import { askSave } from '../../lib/utils/askSave';
 import { resizeImageForUpload } from '../../lib/utils/resizeImage';
 import { returnPathOr } from '../../lib/utils/returnPath';
 import { ServiceDropdown } from '../../lib/components/ServiceDropdown';
 import { usePhoneContacts } from '../../lib/hooks/usePhoneContacts';
 import { SuggestInput, type SuggestOption } from '../../lib/components/finance/SuggestInput';
+import { useConfirmNewParty, withType } from '../../lib/components/finance/NewPartyConfirm';
 import { buildCustomerSuggestions } from '../../lib/utils/customerSuggestions';
 import { isValidPhone10 } from '../../lib/utils/phone';
 import { parseAmount, digitsInput } from '../../lib/utils/number';
@@ -80,6 +80,9 @@ function ResellerRequestDetails() {
   const createRequest = useSupabaseInsert('service_requests');
   const createCustomer = useSupabaseInsert('customers');
   const updateCustomer = useSupabaseUpdate('customers');
+  // The full name/phone/Ledger-type popup a Sale bill's own "+ Add as new ledger" row opens - see
+  // NewPartyConfirm.tsx.
+  const { askNewParty, dialog: newPartyDialog } = useConfirmNewParty();
   const { data: myCustomers } = useSupabaseQuery('customers', {
     filters: userId ? { owner_id: userId } : {},
     orderBy: { column: 'name' },
@@ -373,13 +376,28 @@ function ResellerRequestDetails() {
     if (option.key === '__new_customer__') {
       const name = typedCustomerName;
       if (!userId || !name) return;
-      if (!(await askSave('Add new customer?', `"${name}" is not in your saved list yet. Save them as a new customer?`))) {
-        return;
-      }
+      const checked = await askNewParty({
+        name,
+        kind: 'customer',
+        askPhone: true,
+        phone: customerPhone.trim() || null,
+        askAddress: true,
+        address: address.trim() || null,
+      });
+      if (!checked) return; // Cancelled: nothing saved.
+      setCustomerName(checked.name);
+      if (checked.phone) setCustomerPhone(checked.phone);
+      if (checked.address && !address.trim()) setAddress(checked.address);
       try {
-        const created = await createCustomer.mutateAsync({ owner_id: userId, name, phone: customerPhone.trim() || null });
-        setCustomerName(created.name);
-        if (created.phone) setCustomerPhone(created.phone);
+        const created = await createCustomer.mutateAsync({
+          owner_id: userId,
+          name: checked.name,
+          phone: checked.phone || null,
+          address: checked.address || address.trim() || null,
+          latitude: coords?.latitude ?? null,
+          longitude: coords?.longitude ?? null,
+          ...withType(checked),
+        });
         setCustomerId(created.id);
       } catch (err) {
         showAlert('Could not add customer', getErrorMessage(err));
@@ -701,6 +719,7 @@ function ResellerRequestDetails() {
         }}
         onClose={() => setShowLocationPicker(false)}
       />
+      {newPartyDialog}
     </View>
   );
 }
