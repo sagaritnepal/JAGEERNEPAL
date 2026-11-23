@@ -31,6 +31,7 @@ import { returnPathOr } from '../../lib/utils/returnPath';
 import { ServiceDropdown } from '../../lib/components/ServiceDropdown';
 import { usePhoneContacts } from '../../lib/hooks/usePhoneContacts';
 import { SuggestInput, type SuggestOption } from '../../lib/components/finance/SuggestInput';
+import { useConfirmNewParty, withType } from '../../lib/components/finance/NewPartyConfirm';
 import { buildCustomerSuggestions } from '../../lib/utils/customerSuggestions';
 import { isValidPhone10 } from '../../lib/utils/phone';
 import { parseAmount, digitsInput } from '../../lib/utils/number';
@@ -79,6 +80,9 @@ function ResellerRequestDetails() {
   const createRequest = useSupabaseInsert('service_requests');
   const createCustomer = useSupabaseInsert('customers');
   const updateCustomer = useSupabaseUpdate('customers');
+  // A typed name that isn't a saved customer is checked here before it's saved - same confirm-first
+  // flow a Sale bill uses for a new customer/vendor (see NewPartyConfirm.tsx).
+  const { askNewParty, dialog: newPartyDialog } = useConfirmNewParty();
   const { data: myCustomers } = useSupabaseQuery('customers', {
     filters: userId ? { owner_id: userId } : {},
     orderBy: { column: 'name' },
@@ -108,7 +112,6 @@ function ResellerRequestDetails() {
   // Set the instant Submit is pressed - the state above only updates on the next render, so a quick
   // double tap could otherwise create the same job twice.
   const submittingRef = useRef(false);
-  const [registeringCustomer, setRegisteringCustomer] = useState(false);
 
   // Fills the form once the job loads - only once, so a refetch never clobbers what is being typed.
   useEffect(() => {
@@ -164,35 +167,6 @@ function ResellerRequestDetails() {
         ? { latitude: customer.latitude, longitude: customer.longitude }
         : null
     );
-  }
-
-  async function handleRegisterNow() {
-    if (!userId || !customerName.trim()) return;
-    if (customerPhone.trim() && !isValidPhone10(customerPhone)) {
-      showAlert('Check the phone number', "Enter the customer's 10-digit phone number first.");
-      return;
-    }
-    if (!address.trim() && !coords) {
-      showAlert('Add a location first', "Add the customer's location before registering them.");
-      return;
-    }
-    setRegisteringCustomer(true);
-    try {
-      const created = await createCustomer.mutateAsync({
-        owner_id: userId,
-        name: customerName.trim(),
-        phone: customerPhone.trim() || null,
-        address: address.trim() || null,
-        latitude: coords?.latitude ?? null,
-        longitude: coords?.longitude ?? null,
-      });
-      setCustomerId(created.id);
-      showAlert('Customer added', `${customerName.trim()} has been saved to My Customers.`);
-    } catch (err) {
-      showAlert('Could not register customer', getErrorMessage(err));
-    } finally {
-      setRegisteringCustomer(false);
-    }
   }
 
   async function handlePickPhoto(index: number) {
@@ -304,33 +278,66 @@ function ResellerRequestDetails() {
         return;
       }
 
-      // Keep the customer directory in sync: update the saved record if one
-      // was picked (and possibly edited here), or save a brand new one so
-      // it's ready to reuse next time. Never blocks the booking if it fails.
+      // Keep the customer directory in sync: update the saved record if one was picked (and possibly
+      // edited here); a name that doesn't match a saved customer is confirmed first - same
+      // confirm-before-save flow a Sale bill uses for a new customer/vendor (see NewPartyConfirm.tsx) -
+      // instead of being saved straight away.
       let linkedCustomerId: string | null = customerId;
-      try {
-        const customerValues = {
-          name: customerName.trim(),
-          phone: customerPhone.trim() || null,
-          address: address.trim() || null,
-          latitude: coords?.latitude ?? null,
-          longitude: coords?.longitude ?? null,
-        };
-        if (linkedCustomerId) {
-          await updateCustomer.mutateAsync({ id: linkedCustomerId, values: customerValues });
-        } else {
-          const created = await createCustomer.mutateAsync({ owner_id: userId, ...customerValues });
-          linkedCustomerId = created.id;
+      let finalCustomerName = customerName.trim();
+      let finalCustomerPhone = customerPhone.trim();
+      if (linkedCustomerId) {
+        try {
+          await updateCustomer.mutateAsync({
+            id: linkedCustomerId,
+            values: {
+              name: finalCustomerName,
+              phone: finalCustomerPhone || null,
+              address: address.trim() || null,
+              latitude: coords?.latitude ?? null,
+              longitude: coords?.longitude ?? null,
+            },
+          });
+        } catch {
+          // The booking still goes ahead linked to the existing record even if this edit didn't save.
         }
-      } catch {
-        // Most likely a duplicate-phone conflict (customers_owner_phone_idx)
-        // against a record that isn't in myCustomers' current cache yet -
-        // link to it by phone instead of leaving the booking unlinked from
-        // the contact book.
-        const existing = customerPhone.trim()
-          ? (myCustomers ?? []).find((c) => c.phone === customerPhone.trim())
-          : undefined;
-        linkedCustomerId = existing?.id ?? null;
+      } else {
+        const checked = await askNewParty({
+          name: finalCustomerName,
+          kind: 'customer',
+          askPhone: true,
+          phone: finalCustomerPhone || null,
+        });
+        if (!checked) {
+          // Cancelled: back to the form, nothing saved.
+          submittingRef.current = false;
+          setSubmitting(false);
+          return;
+        }
+        finalCustomerName = checked.name;
+        finalCustomerPhone = checked.phone ?? finalCustomerPhone;
+        setCustomerName(finalCustomerName);
+        if (checked.phone) setCustomerPhone(checked.phone);
+        try {
+          const created = await createCustomer.mutateAsync({
+            owner_id: userId,
+            name: finalCustomerName,
+            phone: finalCustomerPhone || null,
+            address: address.trim() || null,
+            latitude: coords?.latitude ?? null,
+            longitude: coords?.longitude ?? null,
+            ...withType(checked),
+          });
+          linkedCustomerId = created.id;
+        } catch {
+          // Most likely a duplicate-phone conflict (customers_owner_phone_idx)
+          // against a record that isn't in myCustomers' current cache yet -
+          // link to it by phone instead of leaving the booking unlinked from
+          // the contact book.
+          const existing = finalCustomerPhone
+            ? (myCustomers ?? []).find((c) => c.phone === finalCustomerPhone)
+            : undefined;
+          linkedCustomerId = existing?.id ?? null;
+        }
       }
 
       await createRequest.mutateAsync({
@@ -338,11 +345,11 @@ function ResellerRequestDetails() {
         reseller_id: userId,
         customer_id: linkedCustomerId,
         origin: 'reseller',
-        customer_name: customerName.trim(),
-        customer_phone: customerPhone.trim() || null,
-        contact_person_name: customerName.trim(),
-        contact_person_phone: customerPhone.trim() || null,
-        company_name: (companySameAsCustomer ? customerName : companyName).trim() || null,
+        customer_name: finalCustomerName,
+        customer_phone: finalCustomerPhone || null,
+        contact_person_name: finalCustomerName,
+        contact_person_phone: finalCustomerPhone || null,
+        company_name: (companySameAsCustomer ? finalCustomerName : companyName).trim() || null,
         issue_type: issueType,
         description: notes.trim() || null,
         status: 'pending',
@@ -513,20 +520,6 @@ function ResellerRequestDetails() {
               }
               adornmentWidth={customerId ? 110 : 0}
             />
-
-            {!customerId && customerName.trim().length > 0 && (
-              <View className="mb-3 mt-2.5 flex-row items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2">
-                <Ionicons name="person-add-outline" size={14} color="#B45309" />
-                <Text className="flex-1 text-xs font-medium text-amber-700">
-                  New customer — not in your saved list yet.
-                </Text>
-                <Pressable onPress={handleRegisterNow} disabled={registeringCustomer} hitSlop={8}>
-                  <Text className="text-xs font-bold text-amber-700">
-                    {registeringCustomer ? 'Adding…' : 'Register now'}
-                  </Text>
-                </Pressable>
-              </View>
-            )}
 
             <FieldLabel>Customer phone</FieldLabel>
             <TextInput
@@ -717,6 +710,7 @@ function ResellerRequestDetails() {
         }}
         onClose={() => setShowLocationPicker(false)}
       />
+      {newPartyDialog}
     </View>
   );
 }
