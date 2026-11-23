@@ -4,7 +4,7 @@
 // customer's details and ledger entries): a small titled card, fields side by
 // side that wrap on a narrow screen, and Cancel / Save on the right.
 import { type ReactNode } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, TextInput, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Text } from './CapsText';
 import { Ionicons } from '@expo/vector-icons';
 import { FINANCE_ENTRY_ACCENT, FINANCE_ENTRY_SHADOW } from './entryTheme';
@@ -15,9 +15,20 @@ export const INPUT = 'rounded-lg border border-gray-300 bg-white px-3 py-2.5 tex
 
 /** A label over its input. Fields sit side by side and wrap onto the next line
  * when the window is narrow, so one form fits a desktop and a phone. */
-export function Field({ label, basis = 220, children }: { label: string; basis?: number; children: ReactNode }) {
+export function Field({
+  label,
+  basis = 220,
+  style,
+  children,
+}: {
+  label: string;
+  basis?: number;
+  /** For a field that opens a dropdown: a raised zIndex lets the list draw over the fields after it. */
+  style?: StyleProp<ViewStyle>;
+  children: ReactNode;
+}) {
   return (
-    <View style={{ flexGrow: 1, flexBasis: basis, minWidth: 0 }}>
+    <View style={[{ flexGrow: 1, flexBasis: basis, minWidth: 0 }, style]}>
       <Text className="mb-1.5 text-xs font-semibold text-gray-600">{label}</Text>
       {children}
     </View>

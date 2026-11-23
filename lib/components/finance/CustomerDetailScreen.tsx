@@ -22,6 +22,7 @@ import { formatMoney, round2 } from '../../utils/money';
 import { BankAccountPickerModal } from './BankAccountPickerModal';
 import { EntryWhenFields, PartyMoveField, PaymentMethodButton, stampOf, timeOf, useEntryParty, useEntryWhen } from './EntryEditParts';
 import { PartyTypeField } from './PartyTypeField';
+import { SuggestInput, type SuggestOption } from './SuggestInput';
 import { TransactionDetailModal } from './TransactionsScreen';
 import { BackButton, BookTable, Pill, ToolbarButton, useBookLayout, useBookToolbar, type BookColumn } from './BookKit';
 import { Field, FieldRow, FormActions, FormCard, INPUT, PopupCard, Segmented } from './FormKit';
@@ -122,13 +123,28 @@ export function EditableDetails({ customerId, basePath, summary }: { customerId:
   const deleteCustomer = useSupabaseDelete('customers', { requireRow: true });
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState('');
-  const nameInput = useRef<TextInput>(null);
+  const nameInput = useRef<TextInput | null>(null);
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [partyTypeId, setPartyTypeId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // The registered customers, for the Name box's dropdown - read only while the edit popup is open.
+  const { data: registered } = useSupabaseQuery('customers', {
+    filters: customer?.owner_id ? { owner_id: customer.owner_id } : {},
+    orderBy: { column: 'name' },
+    enabled: editing && !!customer?.owner_id,
+  });
 
   if (!customer) return null;
+
+  // What is typed in Name picks from the registered customers (not this one): every name that contains it, or
+  // whose phone does - the ones that start with it first - so a name is chosen as it is registered, not retyped.
+  const typedName = name.trim().toLowerCase();
+  const nameOptions: SuggestOption[] = (registered ?? [])
+    .filter((c) => c.id !== customerId && (!typedName || c.name.toLowerCase().includes(typedName) || (c.phone ?? '').includes(typedName)))
+    .sort((a, b) => Number(b.name.toLowerCase().startsWith(typedName)) - Number(a.name.toLowerCase().startsWith(typedName)))
+    .slice(0, 40)
+    .map((c) => ({ key: c.id, label: nameCaps(c.name), sub: [c.phone, c.address].filter(Boolean).join(' · ') || null }));
 
   function startEditing() {
     setName(nameCaps(customer!.name));
@@ -193,47 +209,56 @@ export function EditableDetails({ customerId, basePath, summary }: { customerId:
 
   // Editing opens in a popup over the page; the name card stays as it is behind it.
   const editPopup = editing ? (
-    <PopupCard title="Edit customer" onClose={() => setEditing(false)}>
-      <FieldRow>
-        <Field label="Name *" basis={240}>
-          <TextInput
-            value={name}
-            ref={nameInput}
-            onChange={(e) => {
-              // typing keeps the caret where it is: capitalising a letter must not send it to the end
-              const el = (e.nativeEvent as unknown as { target?: HTMLInputElement }).target;
-              const at = el?.selectionStart;
-              if (Platform.OS === 'web' && el && at != null) requestAnimationFrame(() => el.setSelectionRange?.(at, at));
-            }}
-            onChangeText={(v) => setName(capWords(v))}
-            autoCapitalize="words"
-            autoFocus
-            placeholder="Name"
-            placeholderTextColor="#9CA3AF"
-            className={INPUT}
-          />
-        </Field>
-        <Field label="Phone (10 digits)" basis={180}>
-          <TextInput
-            value={phone}
-            onChangeText={(v) => setPhone(v.replace(/[^0-9]/g, ''))}
-            placeholder="98XXXXXXXX"
-            placeholderTextColor="#9CA3AF"
-            keyboardType="phone-pad"
-            maxLength={10}
-            className={INPUT}
-          />
-        </Field>
-        <Field label="Address" basis={320}>
-          <TextInput
-            value={address}
-            onChangeText={setAddress}
-            placeholder="Address"
-            placeholderTextColor="#9CA3AF"
-            className={INPUT}
-          />
-        </Field>
-      </FieldRow>
+    // Not scrollable: the Name box's dropdown and the Ledger type's own list would otherwise each sit in a
+    // ScrollView inside the popup's (see PopupCard); the form is short enough to never need to scroll.
+    <PopupCard title="Edit customer" onClose={() => setEditing(false)} scrollable={false}>
+      {/* Raised, so the Name dropdown draws over the Ledger type below the row. */}
+      <View style={{ zIndex: 30 }}>
+        <FieldRow>
+          <Field label="Name *" basis={240} style={{ zIndex: 30 }}>
+            <SuggestInput
+              value={name}
+              inputRef={(el) => {
+                nameInput.current = el;
+              }}
+              onChangeText={(v) => {
+                // typing keeps the caret where it is: capitalising a letter must not send it to the end
+                const el = nameInput.current as unknown as HTMLInputElement | null;
+                const at = el?.selectionStart;
+                setName(capWords(v));
+                if (Platform.OS === 'web' && el && at != null) requestAnimationFrame(() => el.setSelectionRange?.(at, at));
+              }}
+              options={nameOptions}
+              onSelectOption={(option) => setName(option.label)}
+              showWhenEmpty
+              autoFocus
+              placeholder="Name"
+              accent="#2563EB"
+              inputClassName={INPUT}
+            />
+          </Field>
+          <Field label="Phone (10 digits)" basis={180}>
+            <TextInput
+              value={phone}
+              onChangeText={(v) => setPhone(v.replace(/[^0-9]/g, ''))}
+              placeholder="98XXXXXXXX"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="phone-pad"
+              maxLength={10}
+              className={INPUT}
+            />
+          </Field>
+          <Field label="Address" basis={320}>
+            <TextInput
+              value={address}
+              onChangeText={setAddress}
+              placeholder="Address"
+              placeholderTextColor="#9CA3AF"
+              className={INPUT}
+            />
+          </Field>
+        </FieldRow>
+      </View>
       <PartyTypeField ownerId={customer.owner_id} value={partyTypeId} onChange={setPartyTypeId} />
       <Text className="text-[11px] text-gray-400">* Required</Text>
       <FormActions onCancel={() => setEditing(false)} onSave={handleSave} saving={saving} />
