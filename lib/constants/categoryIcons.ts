@@ -114,6 +114,18 @@ export function resolveVisualKey(rawLabel: string | null | undefined): string | 
   return Object.keys(CATEGORY_ICON_MAP).find((label) => rawLabel.startsWith(label)) ?? null;
 }
 
+/** "Laptop Repair - Screen replacement" -> "Laptop Repair". A job's issue_type is
+ * "{category} - {action}" (see request-details.tsx); a built-in category is recognised by name
+ * first, so a label that itself contains " - " still groups correctly. Shared by anything that
+ * buckets jobs by category (the technician dashboard, its KPI stats). */
+export function categoryOf(issueType: string | null | undefined): string {
+  if (!issueType) return 'Other';
+  const known = resolveVisualKey(issueType);
+  if (known) return known;
+  const head = issueType.split(' - ')[0].trim();
+  return head || 'Other';
+}
+
 // Stable per-label color + icon, for places (request cards, job cards) that
 // show one category badge at a time rather than a whole grid. Accepts either
 // a bare category label or a request's `issue_type` (built as

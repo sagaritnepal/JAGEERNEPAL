@@ -5,9 +5,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { CategoryBadge } from '../CategoryBadge';
 import { Appear, PressScale, Pulse, Rise } from '../Motion';
 import { CategoryLineChart } from './CategoryLineChart';
+import { CategoryTimeCard, timeLabel } from './CategoryTimeCard';
+import { ReviewsCard } from './ReviewsCard';
+import { NeedsAttentionCard } from './NeedsAttentionCard';
 import { DateRangeSheet } from './DateRangeSheet';
 import { useCalendarMode } from '../../hooks/useCalendarMode';
 import { localTodayIso } from '../../utils/localDate';
+import { computeTechnicianKpis, type TechnicianKpis } from '../../utils/technicianKpis';
 import {
   NARROW_LIMITS,
   WIDE_LIMITS,
@@ -123,6 +127,45 @@ function Tile({
   );
 }
 
+/** A smaller, read-only KPI chip - same card language as Tile, but nothing to tap through to (the
+ * value is the whole story: avg time, on-time rate, rating, repeat visits). */
+function InfoTile({
+  icon,
+  label,
+  value,
+  caption,
+  color,
+  bg,
+  wide,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  value: string;
+  caption: string;
+  color: string;
+  bg: string;
+  wide: boolean;
+}) {
+  return (
+    <View className={CARD} style={{ flex: 1, minWidth: wide ? 150 : 140, padding: wide ? 16 : 12, gap: wide ? 10 : 6 }}>
+      <View className="flex-row items-center gap-2">
+        <View className="h-7 w-7 items-center justify-center rounded-full" style={{ backgroundColor: bg }}>
+          <Ionicons name={icon} size={14} color={color} />
+        </View>
+        <Text className="flex-1 text-[10px] font-bold uppercase text-gray-500" style={{ letterSpacing: 0.5 }} numberOfLines={1}>
+          {label}
+        </Text>
+      </View>
+      <Text className="font-extrabold text-gray-900" style={{ fontSize: wide ? 21 : 17 }} numberOfLines={1}>
+        {value}
+      </Text>
+      <Text className="text-[11px] text-gray-500" numberOfLines={1}>
+        {caption}
+      </Text>
+    </View>
+  );
+}
+
 function Skeleton({ wide }: { wide: boolean }) {
   const block = 'rounded-md bg-gray-100';
   return (
@@ -158,6 +201,7 @@ export function TechnicianDashboardView({
   completions,
   loading,
   technicianName,
+  kpiInputs,
   onOpenCompleted,
   onOpenEarnings,
   workingNow,
@@ -166,6 +210,9 @@ export function TechnicianDashboardView({
   completions: Completion[];
   loading: boolean;
   technicianName?: string | null;
+  /** Everything computeTechnicianKpis needs except the date range, which this view already owns -
+   * undefined while its own queries are still loading. */
+  kpiInputs?: Omit<Parameters<typeof computeTechnicianKpis>[0], 'range'>;
   onOpenCompleted: () => void;
   onOpenEarnings: () => void;
   /** The "working on now" card - the live, actionable thing, so it leads the page ahead of every
@@ -209,6 +256,11 @@ export function TechnicianDashboardView({
   );
   const totalAll = totals.reduce((s, t) => s + t.jobs, 0);
   const rangeText = rangeLabel(range, mode);
+
+  const kpis: TechnicianKpis | null = useMemo(
+    () => (kpiInputs ? computeTechnicianKpis({ ...kpiInputs, range }) : null),
+    [kpiInputs, range.start, range.end] // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   // Today's own line in the greeting - a fixed anchor, independent of whatever range the toggle
   // below is set to, so "how did today go" never needs switching the filter to see.
@@ -276,6 +328,59 @@ export function TechnicianDashboardView({
       </View>
     </View>
   );
+
+  const kpiInfoTiles = kpis ? (
+    <View className="flex-row flex-wrap" style={{ gap: wide ? 16 : 10 }}>
+      <InfoTile
+        icon="speedometer-outline"
+        label="Avg time to finish"
+        value={kpis.avgMinutesOverall != null ? timeLabel(kpis.avgMinutesOverall) : '—'}
+        caption={`${kpis.jobsWithTime} ${kpis.jobsWithTime === 1 ? 'job' : 'jobs'} timed`}
+        color="#B45309"
+        bg="#FFFBEB"
+        wide={wide}
+      />
+      <InfoTile
+        icon="checkmark-done-circle-outline"
+        label="On-time rate"
+        value={kpis.onTimeRate != null ? `${Math.round(kpis.onTimeRate)}%` : '—'}
+        caption="vs category targets"
+        color="#15803D"
+        bg="#F0FDF4"
+        wide={wide}
+      />
+      <InfoTile
+        icon="star-outline"
+        label="Customer rating"
+        value={kpis.reviews.average != null ? `${kpis.reviews.average.toFixed(1)} / 5` : '—'}
+        caption={`${kpis.reviews.count} ${kpis.reviews.count === 1 ? 'review' : 'reviews'}`}
+        color="#C2410C"
+        bg="#FFF7ED"
+        wide={wide}
+      />
+      <InfoTile
+        icon="repeat-outline"
+        label="Repeat visits"
+        value={`${kpis.repeatVisits} of ${kpis.jobsWithTime}`}
+        caption="Needed a return trip"
+        color="#B91C1C"
+        bg="#FEF2F2"
+        wide={wide}
+      />
+    </View>
+  ) : null;
+
+  const performanceSection = kpis ? (
+    <View style={{ flexDirection: split ? 'row' : 'column', gap: 16, alignItems: 'flex-start' }}>
+      <View style={{ flex: split ? 1.75 : undefined, minWidth: 0, width: split ? undefined : '100%' }}>
+        <CategoryTimeCard categories={kpis.categories} />
+      </View>
+      <View style={{ flex: split ? 1 : undefined, minWidth: 0, width: split ? undefined : '100%', gap: 16 }}>
+        <ReviewsCard reviews={kpis.reviews} />
+        <NeedsAttentionCard items={kpis.needsAttention} />
+      </View>
+    </View>
+  ) : null;
 
   const chartCard = (
     <View className={CARD} style={{ padding: wide ? 24 : 16, paddingBottom: wide ? 16 : 12 }}>
@@ -453,6 +558,8 @@ export function TechnicianDashboardView({
                 </View>
               </Rise>
               <Rise index={next()}>{tiles}</Rise>
+              {kpiInfoTiles ? <Rise index={next()}>{kpiInfoTiles}</Rise> : null}
+              {performanceSection ? <Rise index={next()}>{performanceSection}</Rise> : null}
               {monthlySection ? <Rise index={next()}>{monthlySection}</Rise> : null}
               <Rise index={next()}>
                 <View style={{ flexDirection: split ? 'row' : 'column', gap: 16, alignItems: split ? 'flex-start' : 'stretch' }}>
@@ -490,6 +597,8 @@ export function TechnicianDashboardView({
           <View style={{ paddingHorizontal: 16, paddingTop: 8, gap: 12 }}>
             <Text className="text-center text-[13px] font-medium text-gray-500">{rangeText}</Text>
             <Rise index={next()}>{tiles}</Rise>
+            {kpiInfoTiles ? <Rise index={next()}>{kpiInfoTiles}</Rise> : null}
+            {performanceSection ? <Rise index={next()}>{performanceSection}</Rise> : null}
             {monthlySection ? <Rise index={next()}>{monthlySection}</Rise> : null}
             <Rise index={next()}>{chartCard}</Rise>
             <Rise index={next()}>{listCard}</Rise>

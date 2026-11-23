@@ -357,6 +357,38 @@ export function dayFigures(spans: DaySpan[], dutyFrom: number, dutyTo: number, n
 
 export const minutesLabel = (minutes: number) => (minutes < 1 ? '0m' : formatDuration(minutes * 60_000));
 
+/** The current calendar month's worked/idle totals for one technician - the same figures the Work
+ * hours card shows (see MyDayTimeline.tsx), for a caller (the KPI "needs attention" card) that only
+ * needs the two numbers, not the day-by-day rendering. */
+export function monthWorkTotals(
+  requests: ServiceRequest[],
+  jobTimes: Map<string, JobTimes> | undefined,
+  technicianId: string,
+  dutyFrom: number,
+  dutyTo: number,
+  now: number
+): { worked: number; idle: number } {
+  const today = new Date(now);
+  const year = today.getFullYear();
+  const month = today.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayStart = new Date(year, month, today.getDate()).getTime();
+  let worked = 0;
+  let idle = 0;
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dayStart = new Date(year, month, day).getTime();
+    const isToday = dayStart === todayStart;
+    const isFuture = dayStart > todayStart;
+    const nowForDay = isToday ? now : isFuture ? dayStart : dayStart + DAY_MS;
+    const spans = workedOn(requests, jobTimes, technicianId, dayStart, nowForDay);
+    const passedMin = isFuture ? 0 : isToday ? (now - dayStart) / 60_000 : 1440;
+    const figures = dayFigures(spans, dutyFrom, dutyTo, passedMin);
+    worked += figures.worked;
+    idle += figures.unused;
+  }
+  return { worked, idle };
+}
+
 /** In an employee's day: green for the time they worked, red for the duty time that went unused. */
 export const WORKED_GREEN = '#4ADE80';
 export const UNUSED_RED = '#F87171';
