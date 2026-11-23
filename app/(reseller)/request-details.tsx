@@ -514,21 +514,19 @@ function ResellerRequestDetails() {
               adornmentWidth={customerId ? 110 : 0}
             />
 
-            {!customerId &&
-              customerName.trim().length > 0 &&
-              (address.trim().length > 0 || coords) && (
-                <View className="mb-3 mt-2.5 flex-row items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2">
-                  <Ionicons name="person-add-outline" size={14} color="#B45309" />
-                  <Text className="flex-1 text-xs font-medium text-amber-700">
-                    New customer — not in your saved list yet.
+            {!customerId && customerName.trim().length > 0 && (
+              <View className="mb-3 mt-2.5 flex-row items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2">
+                <Ionicons name="person-add-outline" size={14} color="#B45309" />
+                <Text className="flex-1 text-xs font-medium text-amber-700">
+                  New customer — not in your saved list yet.
+                </Text>
+                <Pressable onPress={handleRegisterNow} disabled={registeringCustomer} hitSlop={8}>
+                  <Text className="text-xs font-bold text-amber-700">
+                    {registeringCustomer ? 'Adding…' : 'Register now'}
                   </Text>
-                  <Pressable onPress={handleRegisterNow} disabled={registeringCustomer} hitSlop={8}>
-                    <Text className="text-xs font-bold text-amber-700">
-                      {registeringCustomer ? 'Adding…' : 'Register now'}
-                    </Text>
-                  </Pressable>
-                </View>
-              )}
+                </Pressable>
+              </View>
+            )}
 
             <FieldLabel>Customer phone</FieldLabel>
             <TextInput
