@@ -157,17 +157,23 @@ function Skeleton({ wide }: { wide: boolean }) {
 export function TechnicianDashboardView({
   completions,
   loading,
+  technicianName,
   onOpenCompleted,
   onOpenEarnings,
   workingNow,
+  monthlyHours,
 }: {
   completions: Completion[];
   loading: boolean;
+  technicianName?: string | null;
   onOpenCompleted: () => void;
   onOpenEarnings: () => void;
-  /** The "working on now" card: right under the Jobs completed and Earnings
-   * tiles, and still shown (in the tiles' place) before there are any stats. */
+  /** The "working on now" card - the live, actionable thing, so it leads the page ahead of every
+   * report below it (shown even before there are any stats to report). */
   workingNow?: ReactNode;
+  /** The month work-hours calendar - its own labelled section further down, since it's a pattern to
+   * check occasionally rather than the live status `workingNow` is. */
+  monthlyHours?: ReactNode;
 }) {
   const { width: windowWidth } = useWindowDimensions();
   // The layout follows the room this screen really has (a web sidebar takes
@@ -203,6 +209,15 @@ export function TechnicianDashboardView({
   );
   const totalAll = totals.reduce((s, t) => s + t.jobs, 0);
   const rangeText = rangeLabel(range, mode);
+
+  // Today's own line in the greeting - a fixed anchor, independent of whatever range the toggle
+  // below is set to, so "how did today go" never needs switching the filter to see.
+  const todayTotals = useMemo(() => totalsByCategory(completions, presetRange('today', today)), [completions, today]);
+  const todayJobs = todayTotals.reduce((s, t) => s + t.jobs, 0);
+  const todayEarn = todayTotals.reduce((s, t) => s + t.earn, 0);
+  const hour = new Date().getHours();
+  const timeGreeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const firstName = technicianName?.trim().split(/\s+/)[0];
 
   const toggle = (category: string) =>
     setSelected((cur) => (cur.includes(category) ? cur.filter((c) => c !== category) : cur.concat(category)));
@@ -389,22 +404,41 @@ export function TechnicianDashboardView({
     </View>
   );
 
+  const greeting = (
+    <View style={{ gap: 2 }}>
+      <Text className="text-xl font-extrabold text-gray-900">
+        {timeGreeting}
+        {firstName ? `, ${firstName}` : ''}
+      </Text>
+      <Text className="text-[13px] text-gray-500">
+        {todayJobs > 0
+          ? `${todayJobs} ${todayJobs === 1 ? 'job' : 'jobs'} done today · NPR ${fmt(todayEarn)} earned`
+          : 'Nothing completed yet today'}
+      </Text>
+    </View>
+  );
+
+  const monthlySection = monthlyHours ? (
+    <View style={{ gap: 10 }}>
+      <Text className="px-1 text-[11px] font-bold capitalize text-gray-500" style={{ letterSpacing: 0.6 }}>
+        Work hours
+      </Text>
+      {monthlyHours}
+    </View>
+  ) : null;
+
   // ---- wide screens: header row, wide tiles, chart beside the list
 
   if (wide) {
     return (
       <View className="flex-1 bg-gray-50" onLayout={(e) => setBoxWidth(e.nativeEvent.layout.width)}>
         <ScrollView className="flex-1" contentContainerStyle={{ padding: 24, gap: 16, paddingBottom: 40 }}>
+          <Rise index={next()}>{greeting}</Rise>
+          {workingNow ? <Rise index={next()}>{workingNow}</Rise> : null}
           {loading ? (
-            <>
-              <Skeleton wide />
-              {workingNow}
-            </>
+            <Skeleton wide />
           ) : completions.length === 0 ? (
-            <>
-              <Rise index={next()}>{empty}</Rise>
-              {workingNow}
-            </>
+            <Rise index={next()}>{empty}</Rise>
           ) : (
             <>
               <Rise index={next()}>
@@ -419,7 +453,7 @@ export function TechnicianDashboardView({
                 </View>
               </Rise>
               <Rise index={next()}>{tiles}</Rise>
-              {workingNow ? <Rise index={next()}>{workingNow}</Rise> : null}
+              {monthlySection ? <Rise index={next()}>{monthlySection}</Rise> : null}
               <Rise index={next()}>
                 <View style={{ flexDirection: split ? 'row' : 'column', gap: 16, alignItems: split ? 'flex-start' : 'stretch' }}>
                   <View style={{ flex: split ? 2 : undefined, minWidth: 0 }}>{chartCard}</View>
@@ -440,9 +474,13 @@ export function TechnicianDashboardView({
 
   return (
     <View className="flex-1 bg-gray-50" onLayout={(e) => setBoxWidth(e.nativeEvent.layout.width)}>
-      {/* The first child has to be the toggle itself (not wrapped in a
-          fragment) for stickyHeaderIndices to pin it. */}
-      <ScrollView className="flex-1" stickyHeaderIndices={ready ? [0] : []} contentContainerStyle={{ paddingBottom: picked.length ? 96 : 32 }}>
+      {/* The greeting and "working on now" scroll away normally; the toggle right after them is the
+          one that has to be an un-fragmented child (not wrapped) for stickyHeaderIndices to pin it. */}
+      <ScrollView className="flex-1" stickyHeaderIndices={ready ? [1] : []} contentContainerStyle={{ paddingBottom: picked.length ? 96 : 32 }}>
+        <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: ready ? 8 : 0, gap: 12 }}>
+          <Rise index={next()}>{greeting}</Rise>
+          {workingNow ? <Rise index={next()}>{workingNow}</Rise> : null}
+        </View>
         {ready ? (
           <View className="bg-gray-50" style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#e5e7eb' }}>
             <RangeToggle preset={preset} onPick={pickPreset} wide={false} />
@@ -452,19 +490,17 @@ export function TechnicianDashboardView({
           <View style={{ paddingHorizontal: 16, paddingTop: 8, gap: 12 }}>
             <Text className="text-center text-[13px] font-medium text-gray-500">{rangeText}</Text>
             <Rise index={next()}>{tiles}</Rise>
-            {workingNow ? <Rise index={next()}>{workingNow}</Rise> : null}
+            {monthlySection ? <Rise index={next()}>{monthlySection}</Rise> : null}
             <Rise index={next()}>{chartCard}</Rise>
             <Rise index={next()}>{listCard}</Rise>
           </View>
         ) : loading ? (
           <View style={{ paddingHorizontal: 16, paddingTop: 12, gap: 12 }}>
             <Skeleton wide={false} />
-            {workingNow}
           </View>
         ) : (
           <View style={{ paddingHorizontal: 16, paddingTop: 16, gap: 12 }}>
             <Rise index={next()}>{empty}</Rise>
-            {workingNow}
           </View>
         )}
       </ScrollView>

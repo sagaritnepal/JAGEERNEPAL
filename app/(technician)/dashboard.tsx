@@ -1,6 +1,5 @@
 // app/(technician)/dashboard.tsx
 import { useMemo } from 'react';
-import { View } from 'react-native';
 import { router } from 'expo-router';
 import { useAuthStore } from '../../lib/hooks/useAuth';
 import { useSupabaseQuery } from '../../lib/hooks/useSupabase';
@@ -28,6 +27,7 @@ function categoryOf(issueType: string | null | undefined): string {
  * work live on the Inbox screen (header button). */
 export default function TechnicianDashboard() {
   const userId = useAuthStore((state) => state.session?.user.id);
+  const profile = useAuthStore((state) => state.profile);
 
   // Same query as the Earnings screen, so both share one cached request.
   const { data: jobCards, isLoading } = useSupabaseQuery('job_cards', {
@@ -54,20 +54,16 @@ export default function TechnicianDashboard() {
     <TechnicianDashboardView
       completions={completions}
       loading={!!userId && (isLoading || jobCards === undefined)}
+      technicianName={profile?.full_name}
       onOpenCompleted={() =>
         // `t` changes every time so the Jobs tab reacts even if it is already on Completed.
         router.push({ pathname: '/(technician)/jobs', params: { tab: 'completed', t: String(Date.now()) } })
       }
       onOpenEarnings={() => router.push('/(technician)/earnings')}
-      // What they are working on right now, then today's own timeline, sit just under the two big tiles.
-      workingNow={
-        userId ? (
-          <View style={{ gap: 12 }}>
-            <WorkingNowCard technicianId={userId} />
-            <MyDayTimeline technicianId={userId} />
-          </View>
-        ) : null
-      }
+      // What they are working on right now leads the page - everything else is a report, this is live.
+      workingNow={userId ? <WorkingNowCard technicianId={userId} /> : null}
+      // Its own labelled section further down - a month's pattern, not something to check every glance.
+      monthlyHours={userId ? <MyDayTimeline technicianId={userId} /> : null}
     />
   );
 }
