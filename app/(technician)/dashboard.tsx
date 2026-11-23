@@ -22,7 +22,6 @@ import { jobCardAmount } from './earnings';
  * button). */
 export default function TechnicianDashboard() {
   const userId = useAuthStore((state) => state.session?.user.id);
-  const profile = useAuthStore((state) => state.profile);
   const { current: employment } = useMyEmployment(userId);
   const resellerId = employment?.reseller_id;
   const now = useTick(30_000);
@@ -91,7 +90,6 @@ export default function TechnicianDashboard() {
     <TechnicianDashboardView
       completions={completions}
       loading={!!userId && (isLoading || jobCards === undefined)}
-      technicianName={profile?.full_name}
       kpiInputs={kpis}
       onOpenCompleted={() =>
         // `t` changes every time so the Jobs tab reacts even if it is already on Completed.

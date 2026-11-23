@@ -28,32 +28,32 @@ function CategoryRow({ stat }: { stat: CategoryTimeStat }) {
   const targetPct = stat.targetMinutes ? Math.min(1, stat.targetMinutes / (stat.targetMinutes * 1.5)) : null;
 
   return (
-    <View className="flex-row flex-wrap items-center gap-3 border-t border-gray-100 py-3 first:border-t-0">
-      <CategoryBadge category={stat.category} size={36} />
-      <View style={{ minWidth: 140, flexShrink: 0 }}>
-        <Text className="text-[13px] font-bold text-gray-900" numberOfLines={1}>
+    <View className="flex-row flex-wrap items-center gap-2 border-t border-gray-100 py-1.5 first:border-t-0">
+      <CategoryBadge category={stat.category} size={24} />
+      <View style={{ minWidth: 110, flexShrink: 0 }}>
+        <Text className="text-[11.5px] font-bold text-gray-900" numberOfLines={1}>
           {stat.category}
         </Text>
-        <Text className="text-[11px] text-gray-500">
+        <Text className="text-[10px] text-gray-500">
           {stat.jobs} {stat.jobs === 1 ? 'job' : 'jobs'}
         </Text>
       </View>
-      <View style={{ minWidth: 72, flexShrink: 0 }}>
-        <Text className="text-sm font-extrabold text-gray-900">{timeLabel(stat.avgMinutes)}</Text>
-        <Text className="text-[11px] text-gray-400">avg</Text>
+      <View style={{ minWidth: 56, flexShrink: 0 }}>
+        <Text className="text-[12.5px] font-extrabold text-gray-900">{timeLabel(stat.avgMinutes)}</Text>
+        <Text className="text-[9px] text-gray-400">avg</Text>
       </View>
-      <View className="relative" style={{ flex: 1, minWidth: 90, height: 8, borderRadius: 4, backgroundColor: '#F3F4F6' }}>
-        <View style={{ position: 'absolute', left: 0, width: `${pct * 100}%`, top: 0, bottom: 0, borderRadius: 4, backgroundColor: style.fg }} />
+      <View className="relative" style={{ flex: 1, minWidth: 70, height: 6, borderRadius: 3, backgroundColor: '#F3F4F6' }}>
+        <View style={{ position: 'absolute', left: 0, width: `${pct * 100}%`, top: 0, bottom: 0, borderRadius: 3, backgroundColor: style.fg }} />
         {targetPct != null && (
-          <View style={{ position: 'absolute', left: `${targetPct * 100}%`, top: -3, bottom: -3, width: 2, backgroundColor: '#374151' }} />
+          <View style={{ position: 'absolute', left: `${targetPct * 100}%`, top: -2, bottom: -2, width: 2, backgroundColor: '#374151' }} />
         )}
       </View>
-      <View className="rounded-full px-2.5 py-1" style={{ backgroundColor: style.bg, flexShrink: 0 }}>
-        <Text className="text-[11px] font-bold" style={{ color: style.fg }}>
+      <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: style.bg, flexShrink: 0 }}>
+        <Text className="text-[9.5px] font-bold" style={{ color: style.fg }}>
           {style.label}
         </Text>
       </View>
-      <Text className="text-right text-[12.5px] text-gray-500" style={{ width: 80, flexShrink: 0 }}>
+      <Text className="text-right text-[11px] text-gray-500" style={{ width: 70, flexShrink: 0 }}>
         NPR {Math.round(stat.earn).toLocaleString()}
       </Text>
     </View>
@@ -66,19 +66,18 @@ function CategoryRow({ stat }: { stat: CategoryTimeStat }) {
 export function CategoryTimeCard({ categories }: { categories: CategoryTimeStat[] }) {
   if (categories.length === 0) {
     return (
-      <View className={CARD} style={{ padding: 20, gap: 4 }}>
-        <Text className="text-base font-bold text-gray-900">Time to finish by category</Text>
-        <Text className="text-sm text-gray-500">No jobs finished in this range yet.</Text>
+      <View className={CARD} style={{ padding: 12, gap: 3 }}>
+        <Text className="text-[13px] font-bold text-gray-900">Time to finish by category</Text>
+        <Text className="text-xs text-gray-500">No jobs finished in this range yet.</Text>
       </View>
     );
   }
   return (
-    <View className={CARD} style={{ padding: 20 }}>
-      <View className="mb-1 flex-row items-center gap-2">
-        <Ionicons name="speedometer-outline" size={16} color="#2563EB" />
-        <Text className="text-base font-bold text-gray-900">Time to finish by category</Text>
+    <View className={CARD} style={{ padding: 12 }}>
+      <View className="flex-row items-center gap-1.5">
+        <Ionicons name="speedometer-outline" size={13} color="#2563EB" />
+        <Text className="text-[13px] font-bold text-gray-900">Time to finish by category</Text>
       </View>
-      <Text className="mb-1 text-xs text-gray-500">Average time per job against each category's target.</Text>
       {categories.map((c) => (
         <CategoryRow key={c.category} stat={c} />
       ))}

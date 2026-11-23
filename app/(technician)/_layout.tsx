@@ -42,9 +42,17 @@ const WIDE_ROUTES = [
   '/notifications',
 ];
 
+function greetingTitle(name: string | null | undefined): string {
+  const hour = new Date().getHours();
+  const timeGreeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const firstName = name?.trim().split(/\s+/)[0];
+  return firstName ? `${timeGreeting}, ${firstName}` : timeGreeting;
+}
+
 export default function TechnicianLayout() {
   const { width } = useWindowDimensions();
   const userId = useAuthStore((state) => state.session?.user.id);
+  const profile = useAuthStore((state) => state.profile);
   const isSupervisor = useMyStaffRole(userId) === 'supervisor';
   const isStaff = useMyEmployment(userId).current?.status === 'accepted';
   useShareLiveLocation(userId);
@@ -65,8 +73,10 @@ export default function TechnicianLayout() {
         options={{
           title: 'Dashboard',
           // Only the dashboard's own header gets the availability toggle -
-          // every other screen uses the header from screenOptions above.
-          header: () => <PortalHeaderBar title="Dashboard" showAvailabilityToggle showInbox />,
+          // every other screen uses the header from screenOptions above. Its
+          // title is the greeting itself, not the tab's name - the content
+          // below used to repeat it as its own first line, which this replaces.
+          header: () => <PortalHeaderBar title={greetingTitle(profile?.full_name)} showAvailabilityToggle showInbox />,
           tabBarIcon: ({ color, focused }) => <TabIcon name="home" color={color} focused={focused} />,
         }}
       />

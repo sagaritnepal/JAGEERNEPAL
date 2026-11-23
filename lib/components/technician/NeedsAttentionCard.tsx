@@ -14,24 +14,24 @@ const TONE_STYLE: Record<AttentionItem['tone'], { bg: string; fg: string; icon: 
  * running long, high idle time this month. Quiet when there's nothing to flag, not an empty box. */
 export function NeedsAttentionCard({ items }: { items: AttentionItem[] }) {
   return (
-    <View className={CARD} style={{ padding: 20 }}>
-      <Text className="mb-1 text-base font-bold text-gray-900">Needs attention</Text>
+    <View className={CARD} style={{ padding: 12 }}>
+      <Text className="mb-1 text-[13px] font-bold text-gray-900">Needs attention</Text>
       {items.length === 0 ? (
-        <View className="flex-row items-center gap-2 py-2">
-          <Ionicons name="checkmark-circle-outline" size={16} color="#15803D" />
-          <Text className="text-sm text-gray-500">Nothing stands out right now.</Text>
+        <View className="flex-row items-center gap-1.5 py-1">
+          <Ionicons name="checkmark-circle-outline" size={13} color="#15803D" />
+          <Text className="text-xs text-gray-500">Nothing stands out right now.</Text>
         </View>
       ) : (
         items.map((item, i) => {
           const style = TONE_STYLE[item.tone];
           return (
-            <View key={i} className={`flex-row items-start gap-2.5 py-2.5 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
-              <View className="h-7 w-7 items-center justify-center rounded-lg" style={{ backgroundColor: style.bg }}>
-                <Ionicons name={style.icon} size={14} color={style.fg} />
+            <View key={i} className={`flex-row items-start gap-2 py-1.5 ${i > 0 ? 'border-t border-gray-100' : ''}`}>
+              <View className="h-5 w-5 items-center justify-center rounded-md" style={{ backgroundColor: style.bg }}>
+                <Ionicons name={style.icon} size={11} color={style.fg} />
               </View>
               <View className="flex-1">
-                <Text className="text-[12.5px] font-bold leading-[17px] text-gray-900">{item.title}</Text>
-                <Text className="mt-0.5 text-[11.5px] text-gray-500">{item.detail}</Text>
+                <Text className="text-[11px] font-bold leading-[15px] text-gray-900">{item.title}</Text>
+                <Text className="mt-0.5 text-[10px] text-gray-500">{item.detail}</Text>
               </View>
             </View>
           );

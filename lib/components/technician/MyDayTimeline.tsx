@@ -16,12 +16,12 @@ const BLUE = '#2563EB';
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** One calendar row's height, and the gap the rows sit at - together they're what a month-change
  * auto-scroll steps by to land on today's row. */
-const ROW_H = 26;
-const ROW_GAP = 4;
+const ROW_H = 19;
+const ROW_GAP = 3;
 const ROW_STEP = ROW_H + ROW_GAP;
 /** How tall the month's visible window is before it scrolls - enough rows to get a feel for the
  * month without pushing the rest of the dashboard down a full screen's worth. */
-const VISIBLE_PX = 300;
+const VISIBLE_PX = 190;
 const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 /** Every hour of the day, 12am through 11pm - the full day, not a sparser sample of it. */
 const HOUR_TICKS = Array.from({ length: 24 }, (_, i) => i);
@@ -40,13 +40,13 @@ function clockOf(dayStart: number, minutesFromMidnight: number): string {
 
 function StatChip({ icon, label, value, color, bg }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; color: string; bg: string }) {
   return (
-    <View className="flex-1 flex-row items-center rounded-xl px-3 py-2.5" style={{ backgroundColor: bg, gap: 8 }}>
-      <Ionicons name={icon} size={16} color={color} />
-      <View style={{ gap: 1 }}>
-        <Text className="text-[10px] font-bold uppercase text-gray-500" style={{ letterSpacing: 0.4 }}>
+    <View className="flex-1 flex-row items-center rounded-lg px-2 py-1.5" style={{ backgroundColor: bg, gap: 6 }}>
+      <Ionicons name={icon} size={12} color={color} />
+      <View style={{ gap: 0 }}>
+        <Text className="text-[9px] font-bold uppercase text-gray-500" style={{ letterSpacing: 0.3 }}>
           {label}
         </Text>
-        <Text className="text-[14.5px] font-extrabold" style={{ color }}>
+        <Text className="text-[12px] font-extrabold" style={{ color }}>
           {value}
         </Text>
       </View>
@@ -98,12 +98,12 @@ function DayRow({
 
   return (
     <View className="flex-row items-center" style={{ height: ROW_H, gap: 8 }}>
-      <View style={{ width: 40 }}>
-        <Text className={`text-[11px] font-bold ${isToday ? 'text-blue-700' : isWeekend ? 'text-red-400' : 'text-gray-700'}`}>
-          {dayLabel} <Text className="text-[9px] font-semibold text-gray-400">{WEEKDAY_SHORT[weekday]}</Text>
+      <View style={{ width: 36 }}>
+        <Text className={`text-[10px] font-bold ${isToday ? 'text-blue-700' : isWeekend ? 'text-red-400' : 'text-gray-700'}`}>
+          {dayLabel} <Text className="text-[8px] font-semibold text-gray-400">{WEEKDAY_SHORT[weekday]}</Text>
         </Text>
       </View>
-      <View className="flex-1 overflow-hidden rounded-md bg-gray-50" style={{ height: 16 }}>
+      <View className="flex-1 overflow-hidden rounded-md bg-gray-50" style={{ height: 13 }}>
         {dutyTo > dutyFrom && (
           <View style={{ position: 'absolute', left: pct(dutyFrom), width: pct(dutyTo - dutyFrom), top: 0, bottom: 0, backgroundColor: '#EFF6FF' }} />
         )}
@@ -233,29 +233,29 @@ export function MyDayTimeline({ technicianId }: { technicianId: string }) {
 
   return (
     <View className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
-      <View className="flex-row items-center justify-between px-4 py-3.5" style={{ backgroundColor: '#EFF6FF' }}>
-        <Pressable onPress={() => setMonthOffset((o) => o - 1)} hitSlop={8} className="h-8 w-8 items-center justify-center rounded-full bg-white">
-          <Ionicons name="chevron-back" size={16} color={BLUE} />
+      <View className="flex-row items-center justify-between px-3 py-2" style={{ backgroundColor: '#EFF6FF' }}>
+        <Pressable onPress={() => setMonthOffset((o) => o - 1)} hitSlop={8} className="h-6 w-6 items-center justify-center rounded-full bg-white">
+          <Ionicons name="chevron-back" size={13} color={BLUE} />
         </Pressable>
-        <Text className="text-[15px] font-extrabold text-gray-900">{monthLabel}</Text>
+        <Text className="text-[13px] font-extrabold text-gray-900">{monthLabel}</Text>
         <Pressable
           onPress={() => !atCurrentMonth && setMonthOffset((o) => o + 1)}
           disabled={atCurrentMonth}
           hitSlop={8}
-          className="h-8 w-8 items-center justify-center rounded-full bg-white"
+          className="h-6 w-6 items-center justify-center rounded-full bg-white"
           style={{ opacity: atCurrentMonth ? 0.35 : 1 }}
         >
-          <Ionicons name="chevron-forward" size={16} color={BLUE} />
+          <Ionicons name="chevron-forward" size={13} color={BLUE} />
         </Pressable>
       </View>
 
-      <View className="flex-row px-4 pt-3.5" style={{ gap: 8 }}>
+      <View className="flex-row px-3 pt-2" style={{ gap: 6 }}>
         <StatChip icon="checkmark-done" label="Worked" value={minutesLabel(monthWorked)} color="#15803D" bg="#F0FDF4" />
         <StatChip icon="time-outline" label="Idle" value={minutesLabel(monthIdle)} color="#B91C1C" bg="#FEF2F2" />
       </View>
 
-      <View className="flex-row items-center px-4 pb-1 pt-3.5" style={{ gap: 8 }}>
-        <View style={{ width: 40 }} />
+      <View className="flex-row items-center px-3 pb-0.5 pt-2" style={{ gap: 8 }}>
+        <View style={{ width: 36 }} />
         <View className="flex-1 flex-row">
           {HOUR_TICKS.map((h) => (
             <Text key={h} style={{ flex: 1 }} className="text-[8px] font-semibold text-gray-400">
@@ -268,7 +268,7 @@ export function MyDayTimeline({ technicianId }: { technicianId: string }) {
       <ScrollView
         ref={scrollRef}
         style={{ maxHeight: VISIBLE_PX }}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 10, gap: ROW_GAP }}
+        contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 6, gap: ROW_GAP }}
         nestedScrollEnabled
       >
         {rows.map((row) => (
@@ -287,16 +287,16 @@ export function MyDayTimeline({ technicianId }: { technicianId: string }) {
         ))}
       </ScrollView>
 
-      <View className="flex-row items-center px-4 pb-3.5 pt-2" style={{ gap: 16 }}>
-        <View className="flex-row items-center" style={{ gap: 5 }}>
-          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: WORKED_GREEN }} />
-          <Text className="text-[10.5px] text-gray-500">Worked (tap for the job)</Text>
+      <View className="flex-row items-center px-3 pb-2 pt-1.5" style={{ gap: 12 }}>
+        <View className="flex-row items-center" style={{ gap: 4 }}>
+          <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: WORKED_GREEN }} />
+          <Text className="text-[9px] text-gray-500">Worked (tap for the job)</Text>
         </View>
-        <View className="flex-row items-center" style={{ gap: 5 }}>
-          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: UNUSED_RED, opacity: 0.6 }} />
-          <Text className="text-[10.5px] text-gray-500">Idle in duty hours</Text>
+        <View className="flex-row items-center" style={{ gap: 4 }}>
+          <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: UNUSED_RED, opacity: 0.6 }} />
+          <Text className="text-[9px] text-gray-500">Idle in duty hours</Text>
         </View>
-        <Text className="text-[10.5px] text-gray-400">
+        <Text className="text-[9px] text-gray-400">
           Duty {employment.work_start_time?.slice(0, 5) ?? '09:00'}–{employment.work_end_time?.slice(0, 5) ?? '17:00'}
         </Text>
       </View>

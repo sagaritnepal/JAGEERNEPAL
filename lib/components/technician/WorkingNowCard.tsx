@@ -115,7 +115,7 @@ export function WorkingNowCard({ technicianId }: { technicianId: string }) {
   // Until the first answer comes back there is nothing to say yet.
   if (jobs === undefined) {
     return (
-      <View className={CARD} style={{ padding: wide ? 20 : 16, gap: 12 }}>
+      <View className={CARD} style={{ padding: wide ? 12 : 16, gap: 10 }}>
         <CardHeader count={0} />
         <View className="h-10 rounded-lg bg-gray-100" />
       </View>
@@ -126,7 +126,7 @@ export function WorkingNowCard({ technicianId }: { technicianId: string }) {
   const hidden = jobs.length - shown.length;
 
   return (
-    <View className={CARD} style={{ padding: wide ? 20 : 16, gap: 14 }}>
+    <View className={CARD} style={{ padding: wide ? 12 : 16, gap: 10 }}>
       <CardHeader count={jobs.length} />
 
       {jobs.length === 0 ? (
