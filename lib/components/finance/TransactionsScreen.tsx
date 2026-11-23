@@ -28,6 +28,7 @@ import { ContactPickerModal } from '../ContactPickerModal';
 import { ToggleSwitch } from '../ToggleSwitch';
 import { FormSection } from './FormSection';
 import { BillItemsTable, type BillItemsTableHandle } from './BillItemsTable';
+import { useItemStock } from '../../hooks/useItemStock';
 import { KeyboardDateInput } from './KeyboardDateInput';
 import { KeyboardSelect } from './KeyboardSelect';
 import { optionLabel } from '../../hooks/useAvailableAmounts';
@@ -1585,6 +1586,8 @@ function TransactionForm({
   const expenseTableRef = useRef<ExpenseEntryTableHandle>(null);
   const methodRef = useRef<HTMLSelectElement | null>(null);
   const itemsTableRef = useRef<BillItemsTableHandle>(null);
+  // Units on hand of each item, shown as the item is picked.
+  const itemStock = useItemStock(userId, products);
   const [vendorFocused, setVendorFocused] = useState(false);
 
   // The Ledger type each person is filed under (Customer, Vendor, Employee ...), shown under their name in the list.
@@ -1943,6 +1946,7 @@ function TransactionForm({
               items={items}
               products={products}
               financeItems={financeItems ?? []}
+              stock={itemStock}
               accent={accent}
               onUpdate={updateItem}
               onRemove={removeItem}

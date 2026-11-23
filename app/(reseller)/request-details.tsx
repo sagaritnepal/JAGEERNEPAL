@@ -37,6 +37,7 @@ import { isValidPhone10 } from '../../lib/utils/phone';
 import { ledgerNameKey } from '../../lib/utils/ledgerName';
 import { parseAmount, digitsInput, decimalInput } from '../../lib/utils/number';
 import { BillItemsTable, type BillItemRow } from '../../lib/components/finance/BillItemsTable';
+import { useItemStock } from '../../lib/hooks/useItemStock';
 import type { Customer } from '../../types/database.types';
 
 const PHOTO_SLOTS = 3;
@@ -122,6 +123,8 @@ function ResellerRequestDetails() {
     filters: userId ? { seller_id: userId, seller_role: 'reseller' } : {},
     enabled: !!userId,
   });
+  // Units on hand of each product, shown as it is picked.
+  const itemStock = useItemStock(userId, myProducts ?? []);
   // Set the instant Submit is pressed - the state above only updates on the next render, so a quick
   // double tap could otherwise create the same job twice.
   const submittingRef = useRef(false);
@@ -714,6 +717,7 @@ function ResellerRequestDetails() {
               items={jobItems}
               products={myProducts ?? []}
               financeItems={[]}
+              stock={itemStock}
               accent="#2563EB"
               onUpdate={updateItem}
               onRemove={removeItem}

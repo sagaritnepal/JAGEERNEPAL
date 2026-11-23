@@ -7,6 +7,7 @@ import { readKey } from '../../utils/webKeys';
 import { SuggestInput, type SuggestOption } from './SuggestInput';
 import { askSave } from '../../utils/askSave';
 import { showAlert, getErrorMessage } from '../../utils/alert';
+import { itemKey, type ItemStock } from '../../hooks/useItemStock';
 
 export interface BillItemRow {
   /** Optional HS code of the item (customs / tariff classification). */
@@ -49,6 +50,18 @@ interface Props {
   footer?: ReactNode;
   /** Saves an item typed here that is not in the stock list yet (after a Save / Cancel question). */
   onCreateItem?: (name: string, rate: number | null) => Promise<void>;
+  /** Units on hand of each item (see useItemStock): shown next to each suggestion. Every item is offered
+   * whether or not any is in stock - a sale often goes in before its Purchase bill does. */
+  stock?: ItemStock;
+}
+
+/** "Qty 3 · NPR 275", "Out of stock · NPR 275", "Qty -2 · NPR 275" (sold before it was bought in). */
+function stockHint(qty: number | undefined, rate: number | null, fallback: string): string {
+  const parts = [
+    qty == null ? null : qty === 0 ? 'Out of stock' : `Qty ${qty.toLocaleString(undefined, { maximumFractionDigits: 3 })}`,
+    rate != null ? `NPR ${rate.toLocaleString()}` : null,
+  ].filter(Boolean);
+  return parts.length ? parts.join(' · ') : fallback;
 }
 
 function isBlank(row: BillItemRow): boolean {
@@ -64,7 +77,7 @@ function cleanNumber(v: string): string {
 }
 
 export const BillItemsTable = forwardRef<BillItemsTableHandle, Props>(function BillItemsTable(
-  { items, products, financeItems, accent, onUpdate, onRemove, onRequestSave, onExit, footer, onCreateItem },
+  { items, products, financeItems, accent, onUpdate, onRemove, onRequestSave, onExit, footer, onCreateItem, stock },
   ref
 ) {
   const inputRefs = useRef<Record<string, TextInput | null>>({});
@@ -80,30 +93,30 @@ export const BillItemsTable = forwardRef<BillItemsTableHandle, Props>(function B
   const catalog = useMemo<ItemSuggestion[]>(() => {
     const seen = new Set<string>();
     const out: ItemSuggestion[] = [];
+    const onHand = (name: string) => stock?.qty.get(itemKey(name));
     for (const p of products) {
-      const k = p.name.trim().toLowerCase();
+      const k = itemKey(p.name);
       if (!k || seen.has(k)) continue;
       seen.add(k);
-      out.push({
-        key: `p-${p.id}`,
-        name: p.name,
-        rate: Number(p.price) > 0 ? Number(p.price) : null,
-        hint: `${Number(p.price) > 0 ? `NPR ${Number(p.price).toLocaleString()} · ` : ''}stock ${p.stock_level}`,
-      });
+      const rate = Number(p.price) > 0 ? Number(p.price) : null;
+      out.push({ key: `p-${p.id}`, name: p.name, rate, hint: stockHint(onHand(p.name) ?? Number(p.stock_level), rate, '') });
     }
     for (const f of financeItems) {
-      const k = f.name.trim().toLowerCase();
+      const k = itemKey(f.name);
       if (!k || seen.has(k)) continue;
       seen.add(k);
-      out.push({
-        key: `f-${f.id}`,
-        name: f.name,
-        rate: f.rate != null ? Number(f.rate) : null,
-        hint: f.rate != null ? `NPR ${Number(f.rate).toLocaleString()}` : 'Saved item',
-      });
+      const rate = f.rate != null ? Number(f.rate) : null;
+      out.push({ key: `f-${f.id}`, name: f.name, rate, hint: stockHint(onHand(f.name), rate, 'Saved item') });
+    }
+    // Items only the bills know (bought or sold, never saved as an item) are offered too.
+    for (const name of stock?.names ?? []) {
+      const k = itemKey(name);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push({ key: `b-${k}`, name, rate: null, hint: stockHint(onHand(name), null, 'Used on a bill') });
     }
     return out;
-  }, [products, financeItems]);
+  }, [products, financeItems, stock]);
 
   const focusedItemIndex = focusedCell?.col === 0 ? focusedCell.index : null;
   const suggestions = useMemo<ItemSuggestion[]>(() => {
