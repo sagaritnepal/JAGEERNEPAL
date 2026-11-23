@@ -40,7 +40,6 @@ import { nameCaps, capWords } from '../../utils/nameCaps';
 import { isValidPhone10 } from '../../utils/phone';
 import { findSameNameLedgers } from '../../utils/ledgerName';
 import { localTodayIso } from '../../utils/localDate';
-import { journalOf } from '../../utils/journalVoucher';
 import { toBsHistoryLabel } from '../../utils/nepaliDate';
 import { highlightText as highlight } from './Highlight';
 import { useCalendarMode } from '../../hooks/useCalendarMode';
@@ -67,8 +66,6 @@ const BILL_KIND: Record<BusinessTransactionType, string> = { sale: 'Sales no.', 
 function useLedgerItems(userId: string | undefined): {
   byParty: Map<string, LedgerItem[]>;
   referenceById: Map<string, LedgerReference>;
-  /** Money that actually moved with each party: all received from them, all paid to them (journal vouchers are not cash). */
-  cashByParty: Map<string, { paid: number; received: number }>;
 } {
   // `all`: balances are sums over every entry, and the API cuts a plain read
   // off at 1000 rows - past that, each party's balance is silently wrong.
@@ -93,15 +90,6 @@ function useLedgerItems(userId: string | undefined): {
   return useMemo(() => {
     const byParty = new Map<string, LedgerItem[]>();
     const referenceById = new Map<string, LedgerReference>();
-    const cashByParty = new Map<string, { paid: number; received: number }>();
-    const cash = (partyId: string) => {
-      let c = cashByParty.get(partyId);
-      if (!c) {
-        c = { paid: 0, received: 0 };
-        cashByParty.set(partyId, c);
-      }
-      return c;
-    };
     const add = (partyId: string, item: LedgerItem) => {
       const list = byParty.get(partyId);
       if (list) list.push(item);
@@ -132,11 +120,6 @@ function useLedgerItems(userId: string | undefined): {
     };
     for (const e of customerEntries ?? []) {
       note('customer', e);
-      // Received: what they paid in. Paid: money given out to them by hand (a debit a bill posts is not cash).
-      if (!journalOf(e.note)) {
-        if (e.entry_type === 'credit') cash(e.customer_id).received += Number(e.amount);
-        else if (e.source === 'manual') cash(e.customer_id).paid += Number(e.amount);
-      }
       add(e.customer_id, {
         id: e.id,
         side: 'customer',
@@ -149,8 +132,6 @@ function useLedgerItems(userId: string | undefined): {
     }
     for (const e of vendorEntries ?? []) {
       note('vendor', e);
-      // Paid: what was paid to the vendor (the debits are the bills they sent).
-      if (!journalOf(e.note) && e.entry_type === 'credit') cash(e.vendor_id).paid += Number(e.amount);
       add(e.vendor_id, {
         id: e.id,
         side: 'vendor',
@@ -161,7 +142,7 @@ function useLedgerItems(userId: string | undefined): {
         note: e.note,
       });
     }
-    return { byParty, referenceById, cashByParty };
+    return { byParty, referenceById };
   }, [customerEntries, vendorEntries, bills]);
 }
 
@@ -366,9 +347,6 @@ interface PartyRowData {
   typeName: string | undefined;
   /** The reference number (sales, purchase, payment or receipt no.) of their latest transaction - null when it has none. */
   lastReference: LedgerReference | null;
-  /** All the money paid to them, and all received from them, as of today. */
-  totalPaid: number;
-  totalReceived: number;
 }
 
 /** The balance as the shared balance cell draws it. */
@@ -673,7 +651,7 @@ function LedgerList({ basePath }: { basePath: string }) {
     enabled: !!userId,
   });
   const appCustomers = useAppCustomers(userId);
-  const { byParty: itemsByParty, referenceById, cashByParty } = useLedgerItems(userId);
+  const { byParty: itemsByParty, referenceById } = useLedgerItems(userId);
   const { nameById: partyTypeName, types: partyTypes } = usePartyTypes(userId);
   // A person typed Expense / Sales / Purchase opens on that report (see usePartyDestination).
   const hrefFor = usePartyDestination(userId, basePath);
@@ -734,11 +712,9 @@ function LedgerList({ basePath }: { basePath: string }) {
           overdue: overdueAmount(balance, receivableAging(all, today)),
           typeName: row.kind === 'customer' && row.customer.party_type_id ? partyTypeName.get(row.customer.party_type_id) : undefined,
           lastReference: (latest && referenceById.get(latest.id)) || null,
-          totalPaid: round2(row.kind === 'customer' ? cashByParty.get(row.id)?.paid ?? 0 : 0),
-          totalReceived: round2(row.kind === 'customer' ? cashByParty.get(row.id)?.received ?? 0 : 0),
         };
       }),
-    [merged, itemsByParty, referenceById, cashByParty, today, partyTypeName]
+    [merged, itemsByParty, referenceById, today, partyTypeName]
   );
 
   // The headline cards count the way the Finance dashboard does, so the two always
@@ -1301,36 +1277,6 @@ function LedgerList({ basePath }: { basePath: string }) {
           ),
       },
       {
-        // All the money paid to them - to a vendor, or given out to a customer - whatever it settled.
-        key: 'totalPaid',
-        label: 'Total paid',
-        width: 110,
-        align: 'right',
-        render: (d) =>
-          d.totalPaid ? (
-            <Text className="text-[12.5px] font-bold" style={{ color: LEDGER_TONE.payable.text }}>
-              {bookMoney(d.totalPaid)}
-            </Text>
-          ) : (
-            <Text className="text-[12.5px] text-gray-300">—</Text>
-          ),
-      },
-      {
-        // All the money received from them.
-        key: 'totalReceived',
-        label: 'Total received',
-        width: 120,
-        align: 'right',
-        render: (d) =>
-          d.totalReceived ? (
-            <Text className="text-[12.5px] font-bold" style={{ color: LEDGER_TONE.receivable.text }}>
-              {bookMoney(d.totalReceived)}
-            </Text>
-          ) : (
-            <Text className="text-[12.5px] text-gray-300">—</Text>
-          ),
-      },
-      {
         // The part of the balance that is money coming in (green), blank when it runs the other way.
         key: 'receivable',
         label: 'Receivable',
@@ -1377,8 +1323,6 @@ function LedgerList({ basePath }: { basePath: string }) {
     const tableFooter = {
       label: `${sortedRows.length} ${sortedRows.length === 1 ? 'party' : 'parties'} · Total`,
       cells: {
-        totalPaid: total(sum((d) => d.totalPaid), LEDGER_TONE.payable.text),
-        totalReceived: total(sum((d) => d.totalReceived), LEDGER_TONE.receivable.text),
         receivable: total(sum((d) => (d.status === 'receivable' ? d.balance : 0)), LEDGER_TONE.receivable.text),
         payable: total(sum((d) => (d.status === 'payable' ? -d.balance : 0)), LEDGER_TONE.payable.text),
         balance: <PartyBalance position={footerPosition} compact />,

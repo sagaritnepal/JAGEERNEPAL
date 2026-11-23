@@ -50,6 +50,8 @@ export function showAlert(title: string, message?: string, buttons?: AlertButton
 export function getErrorMessage(err: unknown, fallback = 'Please try again.'): string {
   if (err && typeof err === 'object' && 'message' in err && typeof (err as { message: unknown }).message === 'string') {
     const message = (err as { message: string }).message;
+    // One owner cannot save the same name twice (0116_merge_duplicate_customers.sql).
+    if (message.includes('customers_owner_name_idx')) return 'A ledger with this name already exists. Pick it from the list instead.';
     if (message) return message;
   }
   return fallback;
