@@ -25,6 +25,8 @@ import { EntryWhenFields, PartyMoveField, PaymentMethodButton, stampOf, timeOf, 
 import { PartyTypeField } from './PartyTypeField';
 import { SuggestInput, type SuggestOption } from './SuggestInput';
 import { TransactionDetailModal } from './TransactionsScreen';
+import { PartyBalance } from './PartyBalance';
+import { partyPosition } from '../../utils/partyBalance';
 import { BackButton, BookTable, Pill, ToolbarButton, useBookLayout, useBookToolbar, type BookColumn } from './BookKit';
 import { Field, FieldRow, FormActions, FormCard, INPUT, PopupCard, Segmented } from './FormKit';
 import { MONEY } from './moneyColors';
@@ -1049,8 +1051,8 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
   const statementAsc = useMemo<HistoryRow[]>(() => withRunningBalance(allLines, 0), [allLines]);
   const rows = useMemo(() => [...statementAsc].reverse(), [statementAsc]);
 
-  // Every ledger reads as one line per vehicle (item), in the Ledger table's own columns: what it was
-  // bought or sold for (Balance), what has been paid or received on it, and what is left (Payable / Receivable).
+  // Every ledger reads as one line per vehicle (item), in the Ledger table's own columns: Receivable, Payable
+  // and the Balance left on it, last.
   // A bill names its vehicles as items (a bill of one vehicle counts in full, else each vehicle's own line); a
   // payment names its vehicle first in its remark (the Paid and Received pages write it so). Anything that names
   // no vehicle on a bill here is a line of its own, so the totals still match the name card. A line opens its
@@ -1373,20 +1375,28 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
     width: 130,
     render: (row) => <Pill text={row.label} color={row.tone.color} bg={row.tone.bg} />,
   };
-  const amountColumn: BookColumn<HistoryRow> = {
-    key: 'amount',
-    label: 'Amount (NPR)',
-    width: 140,
-    align: 'right',
-    render: (row) => (
-      <View className="items-end">
-        <Text className="text-[13px] font-bold" style={{ color: row.amountColor }}>
-          {formatMoney(row.amount)}
-        </Text>
-        {balanceNote(row)}
-      </View>
-    ),
-  };
+  // Every ledger reads the same way: what a line adds to Receivable (green) or to Payable (red), and the
+  // balance after it, last (both ledgers netted, as the Ledger list shows it).
+  const cashFig = (v: number, color: string) =>
+    v ? (
+      <Text className="text-[12.5px] font-bold" style={{ color }} numberOfLines={1}>
+        {formatMoney(v)}
+      </Text>
+    ) : (
+      <Text className="text-[12.5px] text-gray-300">—</Text>
+    );
+  const moneyColumns: BookColumn<HistoryRow>[] = [
+    { key: 'receivable', label: 'Receivable', width: 110, align: 'right', render: (row) => cashFig(row.info ? 0 : row.debit, MONEY.in.text) },
+    { key: 'payable', label: 'Payable', width: 110, align: 'right', render: (row) => cashFig(row.info ? 0 : row.credit, MONEY.out.text) },
+    {
+      key: 'balance',
+      label: 'Balance',
+      width: 120,
+      align: 'right',
+      render: (row) =>
+        row.info ? <Text className="text-[12.5px] text-gray-300">—</Text> : <PartyBalance position={partyPosition({ receivable: row.balance, payable: 0 })} compact />,
+    },
+  ];
   const actionColumn: BookColumn<HistoryRow> = {
     key: 'action',
     label: '',
@@ -1440,7 +1450,7 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
           },
           { key: 'details', label: 'Transaction details', render: (row) => detailsCell(row, false, false) },
           typeColumn,
-          amountColumn,
+          ...moneyColumns,
           actionColumn,
         ]
       : [
@@ -1448,7 +1458,7 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
           billNoColumn(104),
           { key: 'details', label: 'Details', render: (row) => detailsCell(row, true, false) },
           typeColumn,
-          amountColumn,
+          ...moneyColumns,
           actionColumn,
         ];
 
@@ -1658,9 +1668,15 @@ function VehicleTable({ groups, full, onOpen }: { groups: VehicleGroup[]; full: 
             </View>
           ),
         },
-        { key: 'balance', label: 'Balance', width: 120, align: 'right', render: (g) => fig(g.billed, '#111827') },
-        { key: 'payable', label: 'Payable', width: 110, align: 'right', render: (g) => fig(payable(g), MONEY.out.text) },
         { key: 'receivable', label: 'Receivable', width: 110, align: 'right', render: (g) => fig(receivable(g), MONEY.in.text) },
+        { key: 'payable', label: 'Payable', width: 110, align: 'right', render: (g) => fig(payable(g), MONEY.out.text) },
+        {
+          key: 'balance',
+          label: 'Balance',
+          width: 120,
+          align: 'right',
+          render: (g) => <PartyBalance position={partyPosition({ receivable: receivable(g), payable: payable(g) })} compact />,
+        },
       ]
     : [
         {
@@ -1694,9 +1710,9 @@ function VehicleTable({ groups, full, onOpen }: { groups: VehicleGroup[]; full: 
         label: `${groups.length} ${groups.length === 1 ? 'line' : 'lines'} · Total`,
         cells: full
           ? {
-              balance: fig(sum((g) => g.billed), '#111827'),
-              payable: fig(sum(payable), MONEY.out.text),
               receivable: fig(sum(receivable), MONEY.in.text),
+              payable: fig(sum(payable), MONEY.out.text),
+              balance: <PartyBalance position={partyPosition({ receivable: sum(receivable), payable: sum(payable) })} compact />,
             }
           : (() => {
               const left = round2(sum(payable) - sum(receivable));
@@ -1731,9 +1747,13 @@ function VehicleEntries({
     .map((r) => {
     const part = group.parts.get(r.key) ?? { billed: 0, paid: 0, received: 0 };
     running = round2(running + (vendor ? part.billed - part.paid + part.received : part.billed + part.paid - part.received));
+    // What the entry adds to what they owe you (+) or to what you owe them (-).
+    const change = round2(vendor ? part.paid - part.received - part.billed : part.billed + part.paid - part.received);
     return {
       row: r,
       part,
+      change,
+      net: vendor ? -running : running,
       payable: vendor ? Math.max(0, running) : Math.max(0, -running),
       receivable: vendor ? Math.max(0, -running) : Math.max(0, running),
     };
@@ -1792,9 +1812,9 @@ function VehicleEntries({
             </View>
           ),
         },
-        { key: 'amount', label: 'Amount', width: 120, align: 'right', render: amount },
-        { key: 'payable', label: 'Payable', width: 110, align: 'right', render: (l) => fig(l.payable, MONEY.out.text) },
-        { key: 'receivable', label: 'Receivable', width: 110, align: 'right', render: (l) => fig(l.receivable, MONEY.in.text) },
+        { key: 'receivable', label: 'Receivable', width: 110, align: 'right', render: (l) => fig(Math.max(0, l.change), MONEY.in.text) },
+        { key: 'payable', label: 'Payable', width: 110, align: 'right', render: (l) => fig(Math.max(0, -l.change), MONEY.out.text) },
+        { key: 'balance', label: 'Balance', width: 120, align: 'right', render: (l) => <PartyBalance position={partyPosition({ receivable: l.net, payable: 0 })} compact /> },
         actions,
       ]
     : [
@@ -1832,8 +1852,9 @@ function VehicleEntries({
         label: `${lines.length} ${lines.length === 1 ? 'entry' : 'entries'} · Total`,
         cells: full
           ? {
-              payable: fig(last?.payable ?? 0, MONEY.out.text),
-              receivable: fig(last?.receivable ?? 0, MONEY.in.text),
+              receivable: fig(round2(lines.reduce((t, l) => t + Math.max(0, l.change), 0)), MONEY.in.text),
+              payable: fig(round2(lines.reduce((t, l) => t + Math.max(0, -l.change), 0)), MONEY.out.text),
+              balance: <PartyBalance position={partyPosition({ receivable: last?.net ?? 0, payable: 0 })} compact />,
             }
           : { left: last?.payable ? fig(last.payable, MONEY.out.text) : fig(last?.receivable ?? 0, MONEY.in.text) },
       }}
