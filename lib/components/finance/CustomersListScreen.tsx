@@ -17,13 +17,12 @@ import { PartyTypeField } from './PartyTypeField';
 import { LedgerTypeMenuModal } from './LedgerTypeMenuModal';
 import { Field, FieldRow, FormActions, INPUT, PopupCard } from './FormKit';
 import { CapsProvider, Text } from './CapsText';
-import { ExcelButton, PrintButton, exportReportDocument, printReportDocument } from './PrintButton';
+import { PrintButton, printReportDocument } from './PrintButton';
 import { reportHtml, type PrintReport, type PrintSection } from '../../utils/printReport';
 import { Checkbox, LEDGER_TONE, StatusBadges, SummaryCard } from './ledger/LedgerUi';
 import { partyPosition, type PartyPosition } from '../../utils/partyBalance';
 import {
   compareItems,
-  drCr,
   entryDay,
   overdueAmount,
   receivableAging,
@@ -31,7 +30,6 @@ import {
   sideTotals,
   statusOf,
   summarize,
-  withRunningBalance,
   type LedgerItem,
   type PartyStatus,
   type PartyTotals,
@@ -629,189 +627,6 @@ export function CustomersListScreen(props: { basePath: string }) {
   );
 }
 
-/** A party's ledger in a popup: every entry on it as a statement - Debit, Credit and the balance after
- * it - newest first, in the same scrollable table the other reports open. Print and Excel for it, and
- * the way on to their ledger page, are in the blue bar. */
-function PartyLedgerPopup({
-  data,
-  items,
-  referenceById,
-  businessName,
-  onOpenLedger,
-  onClose,
-}: {
-  data: PartyRowData;
-  items: LedgerItem[];
-  referenceById: Map<string, LedgerReference>;
-  businessName: string;
-  onOpenLedger: () => void;
-  onClose: () => void;
-}) {
-  useCalendarMode(); // draws its dates again when the AD / BS toggle changes
-  const { width } = useWindowDimensions();
-  const roomy = width >= 760;
-  const name = nameCaps(data.row.name);
-
-  // Oldest first to work the balance out, then newest first to read.
-  const lines = useMemo(() => {
-    const oldestFirst = [...items].sort(compareItems).map((item) => ({ item, ...drCr(item.side, item.entryType, item.amount) }));
-    return withRunningBalance(oldestFirst, 0).reverse();
-  }, [items]);
-  const debit = lines.reduce((sum, l) => sum + l.debit, 0);
-  const credit = lines.reduce((sum, l) => sum + l.credit, 0);
-  const closing = debit - credit;
-
-  const sideWord = (b: number) => (Math.round(b) > 0 ? ' Dr' : Math.round(b) < 0 ? ' Cr' : '');
-  const balanceText = (b: number) => `${dash(Math.abs(b))}${sideWord(b)}`;
-  const balanceColor = (b: number) => (Math.round(b) > 0 ? LEDGER_TONE.receivable.text : Math.round(b) < 0 ? LEDGER_TONE.payable.text : '#6B7280');
-  const kindOf = (item: LedgerItem) =>
-    journalOf(item.note)
-      ? 'Journal voucher'
-      : item.side === 'customer'
-        ? item.entryType === 'debit'
-          ? 'Billed'
-          : 'Received'
-        : item.entryType === 'debit'
-          ? 'Bought on credit'
-          : 'Paid';
-  const subOf = (item: LedgerItem) => {
-    const ref = referenceById.get(item.id);
-    const journal = journalOf(item.note);
-    const note = journal ? [journal.code, journal.narration].filter(Boolean).join(' · ') : item.note;
-    return [ref ? `${ref.kind} ${ref.no}` : null, note].filter(Boolean).join(' · ');
-  };
-
-  const buildReport = (): PrintReport => ({
-    title: `Ledger - ${name}`,
-    businessName,
-    subtitle: [data.typeName, data.row.phone].filter(Boolean).join(' · ') || undefined,
-    printedOn: toBsHistoryLabel(localTodayIso()),
-    summary: [
-      { label: 'Balance', value: `NPR ${balanceText(closing)}` },
-      { label: 'Total debit', value: `NPR ${bookMoney(debit)}` },
-      { label: 'Total credit', value: `NPR ${bookMoney(credit)}` },
-      { label: 'Entries', value: String(lines.length) },
-    ],
-    sections: [
-      {
-        columns: [
-          { label: 'SN' },
-          { label: 'Date' },
-          { label: 'Details' },
-          { label: 'Debit', align: 'right' },
-          { label: 'Credit', align: 'right' },
-          { label: 'Balance (NPR)', align: 'right' },
-        ],
-        rows: lines.map((l, i) => [
-          String(i + 1),
-          toBsHistoryLabel(l.item.day),
-          [kindOf(l.item), subOf(l.item)].filter(Boolean).join(' · '),
-          l.debit ? bookMoney(l.debit) : '',
-          l.credit ? bookMoney(l.credit) : '',
-          balanceText(l.balance),
-        ]),
-        footer: ['', '', 'Total', bookMoney(debit), bookMoney(credit), balanceText(closing)],
-        emptyText: 'No entries yet.',
-      },
-    ],
-    note: 'Debit = they owe you more, Credit = they owe you less. Dr = they owe you, Cr = you owe them.',
-  });
-
-  type Line = (typeof lines)[number];
-  const detailsCell = (l: Line, withDate: boolean) => (
-    <View style={{ minWidth: 0, gap: 2 }}>
-      <Text className="text-[13px] font-medium text-gray-900" numberOfLines={1}>
-        {kindOf(l.item)}
-      </Text>
-      {(!!subOf(l.item) || withDate) && (
-        <Text className="text-[11px] text-gray-400" numberOfLines={1}>
-          {[withDate ? toBsHistoryLabel(l.item.day) : null, subOf(l.item)].filter(Boolean).join(' · ')}
-        </Text>
-      )}
-    </View>
-  );
-  const figure = (value: number, color: string) =>
-    value ? (
-      <Text className="text-[12.5px] font-bold" style={{ color }} numberOfLines={1}>
-        {bookMoney(value)}
-      </Text>
-    ) : (
-      <Text className="text-[12.5px] text-gray-300">—</Text>
-    );
-  const balanceCell = (l: Line) => (
-    <Text className="text-[12.5px] font-bold" style={{ color: balanceColor(l.balance) }} numberOfLines={1}>
-      {balanceText(l.balance)}
-    </Text>
-  );
-
-  const columns: BookColumn<Line>[] = roomy
-    ? [
-        { key: 'sn', label: 'SN', width: 52, render: (_l, i) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text> },
-        { key: 'date', label: 'Date', width: 130, render: (l) => <Text className="text-[12.5px] text-gray-600">{toBsHistoryLabel(l.item.day)}</Text> },
-        { key: 'details', label: 'Details', render: (l) => detailsCell(l, false) },
-        { key: 'debit', label: 'Debit', width: 110, align: 'right', render: (l) => figure(l.debit, LEDGER_TONE.receivable.text) },
-        { key: 'credit', label: 'Credit', width: 110, align: 'right', render: (l) => figure(l.credit, LEDGER_TONE.payable.text) },
-        { key: 'balance', label: 'Balance', width: 130, align: 'right', render: balanceCell },
-      ]
-    : [
-        { key: 'details', label: 'Details', render: (l) => detailsCell(l, true) },
-        {
-          key: 'debit',
-          label: 'Debit / Credit',
-          width: 104,
-          align: 'right',
-          render: (l) => (l.debit ? figure(l.debit, LEDGER_TONE.receivable.text) : figure(l.credit, LEDGER_TONE.payable.text)),
-        },
-        { key: 'balance', label: 'Balance', width: 104, align: 'right', render: balanceCell },
-      ];
-  const footerCells = roomy
-    ? {
-        debit: <Text className="text-[13px] font-extrabold" style={{ color: LEDGER_TONE.receivable.text }}>{bookMoney(debit)}</Text>,
-        credit: <Text className="text-[13px] font-extrabold" style={{ color: LEDGER_TONE.payable.text }}>{bookMoney(credit)}</Text>,
-        balance: <Text className="text-[13px] font-extrabold" style={{ color: balanceColor(closing) }}>{balanceText(closing)}</Text>,
-      }
-    : { balance: <Text className="text-[13px] font-extrabold" style={{ color: balanceColor(closing) }}>{balanceText(closing)}</Text> };
-
-  return (
-    <PopupCard
-      title={name}
-      onClose={onClose}
-      maxWidth={920}
-      closeOnOutside
-      headerRight={
-        <>
-          <PrintButton onPress={() => void printReportDocument(reportHtml(buildReport()))} />
-          <ExcelButton onPress={() => void exportReportDocument(buildReport())} />
-          <Pressable
-            onPress={onOpenLedger}
-            accessibilityRole="button"
-            accessibilityLabel="Open ledger"
-            className="h-9 flex-row items-center justify-center rounded-lg border border-gray-300 bg-white px-3"
-            style={{ gap: 6 }}
-          >
-            <Ionicons name="open-outline" size={16} color="#1D4ED8" />
-            {roomy && <Text className="text-[13px] font-semibold text-gray-700">Open ledger</Text>}
-          </Pressable>
-        </>
-      }
-    >
-      {lines.length === 0 ? (
-        <View className="items-center rounded-xl border border-gray-300 bg-white py-8">
-          <Text className="text-gray-500">No entries yet.</Text>
-        </View>
-      ) : (
-        <BookTable
-          stickyHeader
-          columns={columns}
-          rows={lines}
-          rowKey={(l) => l.item.id}
-          footer={{ label: `${lines.length} ${lines.length === 1 ? 'entry' : 'entries'} · Total`, cells: footerCells }}
-        />
-      )}
-    </PopupCard>
-  );
-}
-
 function LedgerList({ basePath }: { basePath: string }) {
   useCalendarMode(); // draws its dates again when the AD / BS toggle changes
   const { add } = useLocalSearchParams<{ add?: string }>();
@@ -830,8 +645,6 @@ function LedgerList({ basePath }: { basePath: string }) {
   const [selecting, setSelecting] = useState(false);
   const [typeMenuOpen, setTypeMenuOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
-  // The party whose ledger is open in a popup - a tap on a party is the popup, not their page.
-  const [viewing, setViewing] = useState<PartyRowData | null>(null);
   // Which headers (Ledger types) are open to show their parties. They all start closed - the headers
   // are the overview, and a type's parties are a tap away instead of a scroll.
   const [openKeys, setOpenKeys] = useState<Set<string>>(new Set());
@@ -1271,22 +1084,11 @@ function LedgerList({ basePath }: { basePath: string }) {
     />
   );
 
-  const partyPopup =
-    viewing && viewing.row.kind === 'customer' ? (
-      <PartyLedgerPopup
-        key={viewing.row.id}
-        data={viewing}
-        items={itemsByParty.get(viewing.row.id) ?? []}
-        referenceById={referenceById}
-        businessName={profile?.business_name ?? profile?.full_name ?? ''}
-        onOpenLedger={() => {
-          const id = viewing.row.id;
-          setViewing(null);
-          router.push(hrefFor(id) as any);
-        }}
-        onClose={() => setViewing(null)}
-      />
-    ) : null;
+  // A tap on a party goes inside, to their ledger page - there is no popup in between. (An app user with no
+  // saved ledger has no page to open.)
+  const openParty = (d: PartyRowData) => {
+    if (d.row.kind === 'customer') router.push(hrefFor(d.row.id) as any);
+  };
 
   const typedName = search.trim();
   const emptyState = (
@@ -1441,9 +1243,7 @@ function LedgerList({ basePath }: { basePath: string }) {
         <Text className="text-[12.5px] text-gray-300">—</Text>
       );
 
-    const open = (d: PartyRowData) => {
-      if (d.row.kind === 'customer') setViewing(d);
-    };
+    const open = openParty;
 
     const columns: BookColumn<PartyRowData>[] = [
       {
@@ -1593,7 +1393,6 @@ function LedgerList({ basePath }: { basePath: string }) {
         )}
 
         {typeMenu}
-        {partyPopup}
       </BookPage>
     );
   }
@@ -1636,7 +1435,7 @@ function LedgerList({ basePath }: { basePath: string }) {
               <PartyCard
                 key={`${d.row.kind}-${d.row.id}`}
                 data={d}
-                onOpen={() => setViewing(d)}
+                onOpen={() => openParty(d)}
                 today={today}
                 selecting={selecting}
                 selected={selected.has(d.row.id)}
@@ -1648,7 +1447,6 @@ function LedgerList({ basePath }: { basePath: string }) {
         )}
 
         {typeMenu}
-        {partyPopup}
       </ScrollView>
     </View>
   );

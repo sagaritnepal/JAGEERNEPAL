@@ -1086,17 +1086,22 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
   }
 
   function removeRow(row: HistoryRow) {
-    showAlert('Remove this entry?', undefined, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: () => {
-          if (row.vendor) deleteVendorEntry.mutate(row.vendor.id);
-          else if (row.ledger) deleteEntry.mutate(row.ledger.id);
+    const failed = { onError: (err: unknown) => showAlert('Could not delete', getErrorMessage(err)) };
+    showAlert(
+      'Delete this entry?',
+      `${row.label} · NPR ${formatMoney(row.amount)} · ${row.dateLabel}. It comes off the ledger. This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            if (row.vendor) deleteVendorEntry.mutate(row.vendor.id, failed);
+            else if (row.ledger) deleteEntry.mutate(row.ledger.id, failed);
+          },
         },
-      },
-    ]);
+      ]
+    );
   }
 
   // Back to wherever this person was opened from - the Ledger, a To receive list,
@@ -1205,9 +1210,18 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
 
   if (!id || !userId) return null;
 
-  const removeButton = (row: HistoryRow) => (
-    <Pressable onPress={() => removeRow(row)} hitSlop={8} accessibilityLabel="Remove entry">
-      <Ionicons name="close" size={16} color="#9CA3AF" />
+  // Every line has a delete button: a bill (its amount comes off the ledger too) and a typed entry are
+  // deleted after a confirm; a line another record wrote (a rental's daily rent, a booked job) says where to
+  // change it instead (see deleteAnyRow).
+  const deleteButton = (row: HistoryRow) => (
+    <Pressable
+      onPress={() => deleteAnyRow(row)}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel="Delete entry"
+      className="h-8 w-8 items-center justify-center rounded-lg"
+    >
+      <Ionicons name="trash-outline" size={17} color="#DC2626" />
     </Pressable>
   );
 
@@ -1217,7 +1231,7 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
     const kind = row.tx ? 'Bill' : row.vendor || (row.ledger?.entry_type === 'debit' && row.manual) ? 'Payment' : 'Receipt';
     return [row.reference ? `${kind} No. ${row.reference}` : null, row.detail].filter(Boolean).join(' · ');
   };
-  // `withNumber` false is the wide table, whose Invoice no. column already has the number.
+  // `withNumber` false is the table, whose Bill no. column already has the number.
   const detailsCell = (row: HistoryRow, withDate: boolean, withNumber = true) => (
     <View style={{ minWidth: 0 }}>
       <Text className="text-[13px] font-medium text-gray-900" numberOfLines={1}>
@@ -1271,9 +1285,14 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
   const actionColumn: BookColumn<HistoryRow> = {
     key: 'action',
     label: '',
-    width: 44,
+    width: 80,
     align: 'right',
-    render: (row) => (row.tx ? <Ionicons name="chevron-forward" size={14} color="#D1D5DB" /> : row.manual ? removeButton(row) : null),
+    render: (row) => (
+      <View className="flex-row items-center justify-end" style={{ gap: 4 }}>
+        {deleteButton(row)}
+        {row.tx ? <Ionicons name="chevron-forward" size={14} color="#D1D5DB" /> : <View style={{ width: 14 }} />}
+      </View>
+    ),
   };
   const snColumn = (width: number): BookColumn<HistoryRow> => ({
     key: 'sn',
@@ -1281,11 +1300,26 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
     width,
     render: (_row, index) => <Text className="text-[12.5px] text-gray-500">{index + 1}</Text>,
   });
-  // SN, the date with its time under it, the number of the bill / receipt / payment, then what it was.
+  // The number of the bill / receipt / payment, straight after SN.
+  const billNoColumn = (width: number): BookColumn<HistoryRow> => ({
+    key: 'billno',
+    label: 'Bill no.',
+    width,
+    render: (row) =>
+      row.reference ? (
+        <Text className="text-[12.5px] font-semibold text-gray-700" numberOfLines={1}>
+          {row.reference}
+        </Text>
+      ) : (
+        <Text className="text-[12.5px] text-gray-400">—</Text>
+      ),
+  });
+  // SN, the bill no., the date with its time under it, then what it was.
   const columns: BookColumn<HistoryRow>[] =
     windowWidth >= 1280
       ? [
           snColumn(52),
+          billNoColumn(150),
           {
             key: 'date',
             label: 'Date',
@@ -1299,25 +1333,19 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
               </View>
             ),
           },
-          {
-            key: 'invoice',
-            label: 'Invoice no.',
-            width: 150,
-            render: (row) =>
-              row.reference ? (
-                <Text className="text-[12.5px] font-semibold text-gray-700" numberOfLines={1}>
-                  {row.reference}
-                </Text>
-              ) : (
-                <Text className="text-[12.5px] text-gray-400">—</Text>
-              ),
-          },
           { key: 'details', label: 'Transaction details', render: (row) => detailsCell(row, false, false) },
           typeColumn,
           amountColumn,
           actionColumn,
         ]
-      : [snColumn(38), { key: 'details', label: 'Details', render: (row) => detailsCell(row, true) }, typeColumn, amountColumn, actionColumn];
+      : [
+          snColumn(38),
+          billNoColumn(104),
+          { key: 'details', label: 'Details', render: (row) => detailsCell(row, true, false) },
+          typeColumn,
+          amountColumn,
+          actionColumn,
+        ];
 
   const historyView =
     rows.length === 0 ? (
@@ -1359,7 +1387,10 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
               </Text>
               {balanceNote(row)}
             </View>
-            {row.tx ? <Ionicons name="chevron-forward" size={14} color="#D1D5DB" style={{ marginLeft: 6 }} /> : row.manual ? removeButton(row) : null}
+            <View className="flex-row items-center" style={{ marginLeft: 2, gap: 2 }}>
+              {deleteButton(row)}
+              {row.tx ? <Ionicons name="chevron-forward" size={14} color="#D1D5DB" /> : null}
+            </View>
           </Pressable>
         ))}
       </View>
