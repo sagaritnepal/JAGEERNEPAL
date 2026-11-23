@@ -23,6 +23,7 @@ import { TimeField } from '../../lib/components/DateTimeFields';
 import { AssignJobSheet } from '../../lib/components/AssignJobToEmployee';
 import { useWideDetail } from '../../lib/components/detail/DetailLayout';
 import { TeamActivityView } from '../../lib/components/team/TeamActivityView';
+import { JobTargetsView } from '../../lib/components/team/JobTargetsView';
 import { SegmentedSwitch } from '../../lib/components/team/TeamParts';
 import { showAlert, getErrorMessage } from '../../lib/utils/alert';
 import { isValidPhone10 } from '../../lib/utils/phone';
@@ -311,17 +312,20 @@ function TeamRow({ member, last }: { member: TeamMember; last: boolean }) {
   );
 }
 
-/** The reseller's Team: what the team is doing right now (Activity) and who
- * is on it (People). Opens on Activity; `?tab=people` opens the roster. */
+/** The reseller's Team: what the team is doing right now (Activity), who is
+ * on it (People), and how long a job in each category should take (Targets).
+ * Opens on Activity; `?tab=people` or `?tab=targets` opens the other two. */
 export default function TeamHub() {
   const params = useLocalSearchParams<{ tab?: string }>();
-  const [tab, setTab] = useState<'activity' | 'people'>(params.tab === 'people' ? 'people' : 'activity');
+  const [tab, setTab] = useState<'activity' | 'people' | 'targets'>(
+    params.tab === 'people' ? 'people' : params.tab === 'targets' ? 'targets' : 'activity'
+  );
   const [attention, setAttention] = useState(0);
   const wide = useWideDetail();
 
   // Links from elsewhere (?tab=...) re-point a screen that stays mounted.
   useEffect(() => {
-    if (params.tab === 'people' || params.tab === 'activity') setTab(params.tab);
+    if (params.tab === 'people' || params.tab === 'activity' || params.tab === 'targets') setTab(params.tab);
   }, [params.tab]);
 
   return (
@@ -334,14 +338,17 @@ export default function TeamHub() {
             options={[
               { key: 'activity', label: 'Activity', badge: attention },
               { key: 'people', label: 'People' },
+              { key: 'targets', label: 'Targets' },
             ]}
           />
         </View>
       </View>
       {tab === 'activity' ? (
         <TeamActivityView onOpenPeople={() => setTab('people')} onAttentionCount={setAttention} />
-      ) : (
+      ) : tab === 'people' ? (
         <People />
+      ) : (
+        <JobTargetsView />
       )}
     </View>
   );

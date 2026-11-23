@@ -376,6 +376,17 @@ export interface ExpenseCategory {
   updated_at: string;
 }
 
+/** How long a job in this category should take, set by the reseller (migration 0112) - a completed
+ * job's actual time reads against this, not against a guess. One row per owner/category pair. */
+export interface ResellerCategoryTarget {
+  id: string;
+  owner_id: string;
+  category_id: string;
+  target_minutes: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface BankAccount {
   id: string;
   owner_id: string;
@@ -654,6 +665,12 @@ export interface Database {
         Row: ExpenseCategory;
         Insert: Partial<ExpenseCategory>;
         Update: Partial<ExpenseCategory>;
+        Relationships: [];
+      };
+      reseller_category_targets: {
+        Row: ResellerCategoryTarget;
+        Insert: Partial<ResellerCategoryTarget>;
+        Update: Partial<ResellerCategoryTarget>;
         Relationships: [];
       };
       bank_accounts: {
