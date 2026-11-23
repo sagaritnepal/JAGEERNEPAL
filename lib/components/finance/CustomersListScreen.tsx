@@ -38,6 +38,7 @@ import { exportPartiesXlsx, type PartyListRow } from '../../utils/exportLedger';
 import { showAlert, getErrorMessage } from '../../utils/alert';
 import { nameCaps, capWords } from '../../utils/nameCaps';
 import { isValidPhone10 } from '../../utils/phone';
+import { findSameNameLedgers } from '../../utils/ledgerName';
 import { localTodayIso } from '../../utils/localDate';
 import { journalOf } from '../../utils/journalVoucher';
 import { toBsHistoryLabel } from '../../utils/nepaliDate';
@@ -227,6 +228,21 @@ function AddCustomerForm({ userId, basePath, initialName, onDone }: { userId: st
     }
     setSaving(true);
     try {
+      // One ledger per name: a name that is already a ledger is not made again.
+      const sameName = (await findSameNameLedgers(userId, name))[0];
+      if (sameName) {
+        showAlert('Already in your ledger', `A ledger named "${nameCaps(sameName.name)}" already exists. Use it instead of making a second one.`, [
+          { text: 'Change the name', style: 'cancel' },
+          {
+            text: 'Open it',
+            onPress: () => {
+              onDone();
+              router.push(hrefFor(sameName.id) as any);
+            },
+          },
+        ]);
+        return;
+      }
       const existingId = trimmedPhone ? await findExistingCustomerByPhone(userId, trimmedPhone) : null;
       if (existingId) {
         // Almost always means this contact was already pulled in by the

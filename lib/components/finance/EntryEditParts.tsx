@@ -13,6 +13,7 @@ import { Field, FieldRow } from './FormKit';
 import { showAlert, getErrorMessage } from '../../utils/alert';
 import { nameCaps } from '../../utils/nameCaps';
 import { entryDay } from '../../utils/ledgerStatement';
+import { ledgerNameKey } from '../../utils/ledgerName';
 
 /** Who an entry being edited is on: the person whose page it is, until another is
  * picked. Picking only changes the choice - nothing moves until the form is saved. */
@@ -116,7 +117,10 @@ export function PartyMoveField({
   // A phone contact or typed name that is not saved yet is saved as a real person now,
   // the way the Sale / Payment forms do - unless someone with that phone already exists.
   async function handleSelectNew(name: string, phone: string | null, partyTypeId: string | null) {
-    const existing = phone ? (customers ?? []).find((c) => c.phone === phone) : undefined;
+    // One ledger per name: someone with that phone - or that name - is already saved.
+    const existing =
+      (phone ? (customers ?? []).find((c) => c.phone === phone) : undefined) ??
+      (customers ?? []).find((c) => ledgerNameKey(c.name) === ledgerNameKey(name));
     if (existing) {
       pick(existing.id, existing.name);
       return;

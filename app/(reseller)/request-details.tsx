@@ -34,6 +34,7 @@ import { SuggestInput, type SuggestOption } from '../../lib/components/finance/S
 import { useConfirmNewParty, withType } from '../../lib/components/finance/NewPartyConfirm';
 import { buildCustomerSuggestions } from '../../lib/utils/customerSuggestions';
 import { isValidPhone10 } from '../../lib/utils/phone';
+import { ledgerNameKey } from '../../lib/utils/ledgerName';
 import { parseAmount, digitsInput, decimalInput } from '../../lib/utils/number';
 import { BillItemsTable, type BillItemRow } from '../../lib/components/finance/BillItemsTable';
 import type { Customer } from '../../types/database.types';
@@ -340,30 +341,37 @@ function ResellerRequestDetails() {
       // brand new one so it's ready to reuse next time. Never blocks the booking if it fails - a
       // name that was already added via the "+ Add as new customer" row in the field above just
       // updates that same record here.
-      let linkedCustomerId: string | null = customerId;
-      try {
-        const customerValues = {
-          name: customerName.trim(),
-          phone: customerPhone.trim() || null,
-          address: address.trim() || null,
-          latitude: coords?.latitude ?? null,
-          longitude: coords?.longitude ?? null,
-        };
-        if (linkedCustomerId) {
-          await updateCustomer.mutateAsync({ id: linkedCustomerId, values: customerValues });
-        } else {
-          const created = await createCustomer.mutateAsync({ owner_id: userId, ...customerValues });
-          linkedCustomerId = created.id;
+      // One ledger per name: a name typed in full that is already a ledger is that ledger - it is linked as it is,
+      // not saved a second time (and its saved phone and address are left alone).
+      const sameNameLedger = customerId
+        ? undefined
+        : (myCustomers ?? []).find((c) => ledgerNameKey(c.name) === ledgerNameKey(customerName));
+      let linkedCustomerId: string | null = customerId ?? sameNameLedger?.id ?? null;
+      if (!sameNameLedger) {
+        try {
+          const customerValues = {
+            name: customerName.trim(),
+            phone: customerPhone.trim() || null,
+            address: address.trim() || null,
+            latitude: coords?.latitude ?? null,
+            longitude: coords?.longitude ?? null,
+          };
+          if (linkedCustomerId) {
+            await updateCustomer.mutateAsync({ id: linkedCustomerId, values: customerValues });
+          } else {
+            const created = await createCustomer.mutateAsync({ owner_id: userId, ...customerValues });
+            linkedCustomerId = created.id;
+          }
+        } catch {
+          // Most likely a duplicate-phone conflict (customers_owner_phone_idx)
+          // against a record that isn't in myCustomers' current cache yet -
+          // link to it by phone instead of leaving the booking unlinked from
+          // the contact book.
+          const existing = customerPhone.trim()
+            ? (myCustomers ?? []).find((c) => c.phone === customerPhone.trim())
+            : undefined;
+          linkedCustomerId = existing?.id ?? null;
         }
-      } catch {
-        // Most likely a duplicate-phone conflict (customers_owner_phone_idx)
-        // against a record that isn't in myCustomers' current cache yet -
-        // link to it by phone instead of leaving the booking unlinked from
-        // the contact book.
-        const existing = customerPhone.trim()
-          ? (myCustomers ?? []).find((c) => c.phone === customerPhone.trim())
-          : undefined;
-        linkedCustomerId = existing?.id ?? null;
       }
 
       await createRequest.mutateAsync({

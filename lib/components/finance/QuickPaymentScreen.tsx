@@ -33,6 +33,7 @@ import type { Customer } from '../../../types/database.types';
 import { localTodayIso } from '../../utils/localDate';
 import { round2, formatMoney } from '../../utils/money';
 import { itemListOf, sellsVehicles } from '../../utils/accountFeatures';
+import { ledgerNameKey } from '../../utils/ledgerName';
 import type { SuggestOption } from './SuggestInput';
 
 // Local date, not UTC - see localTodayIso.
@@ -275,12 +276,13 @@ function QuickPaymentForm() {
   async function handleSelectNew(name: string, phone: string | null, partyTypeId: string | null) {
     if (!userId) return;
     setShowPicker(false);
-    if (phone) {
-      const existing = (customers ?? []).find((c) => c.phone === phone);
-      if (existing) {
-        selectCustomer(existing);
-        return;
-      }
+    // One ledger per name: someone with that phone - or that name - is already saved.
+    const existing =
+      (phone ? (customers ?? []).find((c) => c.phone === phone) : undefined) ??
+      (customers ?? []).find((c) => ledgerNameKey(c.name) === ledgerNameKey(name));
+    if (existing) {
+      selectCustomer(existing);
+      return;
     }
     try {
       const created = await createCustomer.mutateAsync({ owner_id: userId, name, phone, ...(partyTypeId ? { party_type_id: partyTypeId } : {}) });
@@ -456,12 +458,13 @@ function QuickPaymentForm() {
     if (!userId || !activeRowKey) return;
     const key = activeRowKey;
     setActiveRowKey(null);
-    if (phone) {
-      const existing = (customers ?? []).find((c) => c.phone === phone);
-      if (existing) {
-        updateRow(key, { selectedCustomer: existing, customerName: existing.name });
-        return;
-      }
+    // One ledger per name: someone with that phone - or that name - is already saved.
+    const existing =
+      (phone ? (customers ?? []).find((c) => c.phone === phone) : undefined) ??
+      (customers ?? []).find((c) => ledgerNameKey(c.name) === ledgerNameKey(name));
+    if (existing) {
+      updateRow(key, { selectedCustomer: existing, customerName: existing.name });
+      return;
     }
     try {
       const created = await createCustomer.mutateAsync({ owner_id: userId, name, phone, ...(partyTypeId ? { party_type_id: partyTypeId } : {}) });

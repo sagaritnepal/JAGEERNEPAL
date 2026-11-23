@@ -33,6 +33,7 @@ import { tidyName } from '../../utils/nameCaps';
 import { itemNamesOf, sellsVehicles } from '../../utils/accountFeatures';
 import type { BusinessTransaction } from '../../../types/database.types';
 import { decimalInput } from '../../utils/number';
+import { ledgerNameKey } from '../../utils/ledgerName';
 
 type Kind = 'opening' | 'received' | 'paid' | 'expense' | 'sale' | 'purchase' | 'transfer' | 'journal';
 
@@ -689,7 +690,10 @@ function EditEntryModal({ target, onClose }: { target: EditTarget | null; onClos
         // A person who is not saved yet is added (after the confirmation popup) and the entry moves to them.
         onSelectNew={async (name, phone, partyTypeId) => {
           if (!userId) return;
-          const existing = phone ? (allParties ?? []).find((c) => c.phone === phone) : undefined;
+          // One ledger per name: someone with that phone - or that name - is already saved.
+          const existing =
+            (phone ? (allParties ?? []).find((c) => c.phone === phone) : undefined) ??
+            (allParties ?? []).find((c) => ledgerNameKey(c.name) === ledgerNameKey(name));
           try {
             const person = existing ?? (await createCustomer.mutateAsync({ owner_id: userId, name, phone, ...(partyTypeId ? { party_type_id: partyTypeId } : {}) }));
             setForm((f) => (f ? { ...f, partyId: person.id } : f));

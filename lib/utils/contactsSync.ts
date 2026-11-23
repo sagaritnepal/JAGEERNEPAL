@@ -72,6 +72,11 @@ export async function syncPhoneContactsToCustomers(ownerId: string): Promise<num
   const byId = new Map(existingRows.map((c) => [c.id, c]));
   const byPhoneContactId = new Map(existingRows.filter((c) => c.phone_contact_id).map((c) => [c.phone_contact_id as string, c.id]));
   const byPhone = new Map(existingRows.filter((c) => c.phone).map((c) => [c.phone as string, c.id]));
+  // One ledger per name: a contact whose name a ledger already has is not added as a second one, and a
+  // synced ledger is not renamed onto another's name.
+  const nameKey = (n: string) => n.trim().replace(/\s+/g, ' ').toLowerCase();
+  const byName = new Map(existingRows.map((c) => [nameKey(c.name), c.id]));
+  const seenNames = new Set<string>();
 
   // Two phone contacts with the same number (very common - a person saved
   // twice) used to both go into one upsert: they'd collide on the
@@ -94,12 +99,15 @@ export async function syncPhoneContactsToCustomers(ownerId: string): Promise<num
       // ("Ram Hardware", not whatever the phone calls them) - sync only
       // links it to the phone contact. Rows sync created keep following the
       // phone contact's name.
-      const name = current.phone_contact_id ? c.name : current.name;
+      const takenBy = byName.get(nameKey(c.name));
+      const name = current.phone_contact_id && (!takenBy || takenBy === existingId) ? c.name : current.name;
       const unchanged =
         current.name === name && current.phone === c.phone && current.phone_contact_id === c.phone_contact_id;
       if (unchanged) continue;
       rows.push({ id: existingId, owner_id: ownerId, phone_contact_id: c.phone_contact_id, name, phone: c.phone, updated_at: new Date().toISOString() });
     } else {
+      if (byName.has(nameKey(c.name)) || seenNames.has(nameKey(c.name))) continue;
+      seenNames.add(nameKey(c.name));
       rows.push({ owner_id: ownerId, phone_contact_id: c.phone_contact_id, name: c.name, phone: c.phone, updated_at: new Date().toISOString() });
     }
   }

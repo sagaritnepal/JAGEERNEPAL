@@ -2,6 +2,7 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { View, Text, TextInput, Pressable, Linking, Platform, useWindowDimensions } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../hooks/useAuth';
@@ -34,6 +35,7 @@ import { deleteErrorMessage } from '../../utils/dbErrors';
 import { nextEntryNo } from '../../utils/nextEntryNo';
 import { useEntryNo } from '../../hooks/useEntryNo';
 import { isValidPhone10 } from '../../utils/phone';
+import { findSameNameLedgers, ledgerNameKey, mergeLedgers, type SameNameLedger } from '../../utils/ledgerName';
 import { toBsHistoryLabel } from '../../utils/nepaliDate';
 import { useCalendarMode } from '../../hooks/useCalendarMode';
 import { localTodayIso } from '../../utils/localDate';
@@ -128,6 +130,16 @@ export function EditableDetails({ customerId, basePath, summary }: { customerId:
   const [address, setAddress] = useState('');
   const [partyTypeId, setPartyTypeId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [merging, setMerging] = useState(false);
+  const queryClient = useQueryClient();
+  // The shop's other ledgers with this same name - there should be none (one ledger per name); when there are
+  // (made before that rule), the card offers to merge them. Its key starts with 'customers', so every save
+  // of a ledger reads it again.
+  const { data: sameName } = useQuery({
+    queryKey: ['customers', 'same-name', customerId, ledgerNameKey(customer?.name)],
+    queryFn: () => findSameNameLedgers(customer!.owner_id, customer!.name, customerId),
+    enabled: !!customer,
+  });
   // The registered customers, for the Name box's dropdown - read only while the edit popup is open.
   const { data: registered } = useSupabaseQuery('customers', {
     filters: customer?.owner_id ? { owner_id: customer.owner_id } : {},
@@ -154,6 +166,60 @@ export function EditableDetails({ customerId, basePath, summary }: { customerId:
     setEditing(true);
   }
 
+  /** Writes the edit form to this person (after any merge, so a phone that was the other ledger's is free). */
+  async function persistEdit(trimmedPhone: string) {
+    if (trimmedPhone && (await phoneAlreadyUsed(customer!.owner_id, trimmedPhone, customerId))) {
+      showAlert('Already saved', 'A customer with this phone number already exists.');
+      return;
+    }
+    await updateCustomer.mutateAsync({
+      id: customerId,
+      values: {
+        name: nameCaps(name.trim()),
+        phone: trimmedPhone || null,
+        address: address.trim() || null,
+        // Only when changed, so saving a party never depends on the type column.
+        ...(partyTypeId !== (customer!.party_type_id ?? null) ? { party_type_id: partyTypeId } : {}),
+      },
+    });
+    setEditing(false);
+  }
+
+  /** Folds the ledgers `others` into this one: every entry, bill and job comes here, and they are removed. It
+   * only happens once the person has said so - it cannot be undone. `renameTo` is the name this one ends up
+   * with (the edit form's, when merging was the way out of a name that is taken). */
+  function askMerge(others: SameNameLedger[], renameTo: string | null, then?: () => Promise<void>) {
+    const many = others.length > 1;
+    const shown = nameCaps(others[0]?.name ?? customer!.name);
+    showAlert(
+      many ? `Merge ${others.length + 1} ledgers into one?` : 'Merge into one ledger?',
+      `${many ? `${others.length + 1} ledgers are` : 'Two ledgers are'} named "${shown}". Everything on the other${many ? 's' : ''} - entries, bills and jobs - moves into this one ledger, and the other${many ? 's are' : ' is'} removed. This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Merge into one',
+          style: 'destructive',
+          onPress: async () => {
+            setMerging(true);
+            try {
+              for (let i = 0; i < others.length; i++) {
+                // The rename goes with the last merge: until then another ledger still has the name.
+                await mergeLedgers(customerId, others[i].id, i === others.length - 1 ? renameTo : null);
+              }
+              await queryClient.invalidateQueries();
+              if (then) await then();
+            } catch (err) {
+              showAlert('Could not merge', getErrorMessage(err));
+            } finally {
+              setMerging(false);
+              setSaving(false);
+            }
+          },
+        },
+      ]
+    );
+  }
+
   async function handleSave() {
     // Only the name is required here - a party with no ledger type yet can still be corrected.
     if (!name.trim()) {
@@ -167,21 +233,15 @@ export function EditableDetails({ customerId, basePath, summary }: { customerId:
     }
     setSaving(true);
     try {
-      if (trimmedPhone && (await phoneAlreadyUsed(customer!.owner_id, trimmedPhone, customerId))) {
-        showAlert('Already saved', 'A customer with this phone number already exists.');
+      // One ledger per name: a name another ledger already has is not saved - the two are merged instead, if
+      // that is what is wanted.
+      const taken = await findSameNameLedgers(customer!.owner_id, name, customerId);
+      if (taken.length > 0) {
+        setSaving(false);
+        askMerge(taken, nameCaps(name.trim()), () => persistEdit(trimmedPhone));
         return;
       }
-      await updateCustomer.mutateAsync({
-        id: customerId,
-        values: {
-          name: nameCaps(name.trim()),
-          phone: trimmedPhone || null,
-          address: address.trim() || null,
-          // Only when changed, so saving a party never depends on the type column.
-          ...(partyTypeId !== (customer!.party_type_id ?? null) ? { party_type_id: partyTypeId } : {}),
-        },
-      });
-      setEditing(false);
+      await persistEdit(trimmedPhone);
     } catch (err) {
       showAlert('Could not save', getErrorMessage(err));
     } finally {
@@ -309,6 +369,26 @@ export function EditableDetails({ customerId, basePath, summary }: { customerId:
         <HeaderButton icon="trash-outline" label="Delete" danger onPress={handleDelete} />
       </View>
     </View>
+    {!!sameName && sameName.length > 0 && (
+      // Made before one-ledger-per-name: the same name twice, each with its own entries and balance.
+      <View className="flex-row flex-wrap items-center rounded-xl border border-amber-300 bg-amber-50 px-4 py-3" style={{ columnGap: 12, rowGap: 8 }}>
+        <Ionicons name="git-merge-outline" size={18} color="#B45309" />
+        <Text className="flex-1 text-[13px] leading-[18px] text-amber-900" style={{ minWidth: 200 }}>
+          {sameName.length === 1 ? 'Another ledger is' : `${sameName.length} other ledgers are`} also named "{nameCaps(customer.name)}". A name should
+          have one ledger - merge them so there is one balance.
+        </Text>
+        <Pressable
+          onPress={() => askMerge(sameName, null)}
+          disabled={merging}
+          accessibilityRole="button"
+          className="h-9 flex-row items-center rounded-lg px-4 disabled:opacity-50"
+          style={{ backgroundColor: '#B45309', gap: 6 }}
+        >
+          <Ionicons name="git-merge-outline" size={15} color="#FFFFFF" />
+          <Text className="text-[13px] font-bold text-white">{merging ? 'Merging…' : 'Merge them'}</Text>
+        </Pressable>
+      </View>
+    )}
     {editPopup}
     </>
   );
