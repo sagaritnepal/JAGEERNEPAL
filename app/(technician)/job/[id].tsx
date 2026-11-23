@@ -185,13 +185,19 @@ function JobCard({ id }: { id: string }) {
   // Re-runs when the status changes (resolved -> in_progress on reopen).
   useEffect(() => {
     if (!jobCard || request?.status !== 'in_progress') return;
+    // Nothing recorded on the job card yet: start from the product(s) and service charge the reseller
+    // set on the job (migration 0115), so the technician confirms them instead of working them out.
     const savedParts = jobCard.parts_used ?? [];
+    const startParts = savedParts.length > 0 ? savedParts : (request.job_products ?? []);
     setParts(
-      savedParts.length > 0
-        ? savedParts.map((p) => ({ name: p.name, quantity: String(p.quantity), cost: String(p.cost) }))
+      startParts.length > 0
+        ? startParts.map((p) => ({ name: p.name, quantity: String(p.quantity), cost: String(p.cost) }))
         : [{ name: '', quantity: '1', cost: '' }]
     );
-    setLaborCost(Number(jobCard.labor_cost) > 0 ? String(jobCard.labor_cost) : '');
+    const plannedCharge = Number(request.service_charge ?? 0);
+    setLaborCost(
+      Number(jobCard.labor_cost) > 0 ? String(jobCard.labor_cost) : plannedCharge > 0 ? String(plannedCharge) : ''
+    );
   }, [jobCard?.id, jobCard?.updated_at, request?.status]);
 
   if (!isLoading && (isError || !request)) {
@@ -745,6 +751,53 @@ function JobCard({ id }: { id: string }) {
 
   const billItems: BillItemRow[] = parts.map((p) => ({ description: p.name, qty: p.quantity, rate: p.cost }));
 
+  // What the reseller set on the job when they created it: the product(s) and the service charge. Shown
+  // before and while the job is worked, so the technician knows the product without having to ask - and
+  // the parts list below starts from it.
+  const plannedProducts = request.job_products ?? [];
+  const plannedCharge = Number(request.service_charge ?? 0);
+  const plannedTotal = plannedProducts.reduce((sum, p) => sum + Number(p.quantity) * Number(p.cost), 0) + plannedCharge;
+  const plannedWork =
+    (plannedProducts.length > 0 || plannedCharge > 0) && (request.status === 'assigned' || request.status === 'in_progress') ? (
+      <View className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-4">
+        <View className="flex-row items-center gap-2">
+          <Ionicons name="cube-outline" size={16} color="#1D4ED8" />
+          <Text className="flex-1 text-sm font-bold text-blue-900">Product & service charge</Text>
+          <Text className="text-xs font-semibold text-blue-700">Set by the reseller</Text>
+        </View>
+        <View className="mt-2.5" style={{ gap: 6 }}>
+          {plannedProducts.map((p, i) => (
+            <View key={`${p.name}-${i}`} className="flex-row items-start gap-2">
+              <Text className="flex-1 text-sm text-gray-900">
+                {p.name}
+                <Text className="text-gray-500">{`  ×${p.quantity}`}</Text>
+              </Text>
+              {Number(p.cost) > 0 && (
+                <Text className="text-sm font-semibold text-gray-900">{npr(Number(p.quantity) * Number(p.cost))}</Text>
+              )}
+            </View>
+          ))}
+          {plannedCharge > 0 && (
+            <View className="flex-row items-start gap-2">
+              <Text className="flex-1 text-sm text-gray-900">Service charge</Text>
+              <Text className="text-sm font-semibold text-gray-900">{npr(plannedCharge)}</Text>
+            </View>
+          )}
+          {plannedTotal > 0 && (
+            <View className="mt-1 flex-row items-center gap-2 border-t border-blue-200 pt-2">
+              <Text className="flex-1 text-sm font-bold text-gray-900">Total</Text>
+              <Text className="text-sm font-bold text-gray-900">{npr(plannedTotal)}</Text>
+            </View>
+          )}
+        </View>
+        {request.status === 'in_progress' && (
+          <Text className="mt-2.5 text-xs leading-[17px] text-blue-800">
+            The parts list below starts from this - change it if the job turned out different.
+          </Text>
+        )}
+      </View>
+    ) : null;
+
   // Sits inside the Items table's own card, as its own section below the rows - the same shape the
   // Sale bill form uses for Services under Items, just the one fixed labor line instead of a named list.
   const laborFooter = (
@@ -976,6 +1029,7 @@ function JobCard({ id }: { id: string }) {
             {holdRequested}
             {onHold}
             {extras}
+            {plannedWork}
             {chalan}
             {partsAndLabor}
             {remark}
@@ -1012,6 +1066,7 @@ function JobCard({ id }: { id: string }) {
       {customerContact}
       {lockedNote}
       {extras}
+      {plannedWork}
       {remark}
       {chalan}
       {partsAndLabor}

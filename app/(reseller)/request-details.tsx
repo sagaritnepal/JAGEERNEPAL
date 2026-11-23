@@ -34,10 +34,12 @@ import { SuggestInput, type SuggestOption } from '../../lib/components/finance/S
 import { useConfirmNewParty, withType } from '../../lib/components/finance/NewPartyConfirm';
 import { buildCustomerSuggestions } from '../../lib/utils/customerSuggestions';
 import { isValidPhone10 } from '../../lib/utils/phone';
-import { parseAmount, digitsInput } from '../../lib/utils/number';
+import { parseAmount, digitsInput, decimalInput } from '../../lib/utils/number';
+import { BillItemsTable, type BillItemRow } from '../../lib/components/finance/BillItemsTable';
 import type { Customer } from '../../types/database.types';
 
 const PHOTO_SLOTS = 3;
+const blankItem = (): BillItemRow => ({ description: '', qty: '1', rate: '' });
 
 export default function ResellerRequestDetailsScreen() {
   const { n, category, action } = useLocalSearchParams<{ n?: string; category?: string; action?: string }>();
@@ -107,8 +109,18 @@ function ResellerRequestDetails() {
   const [photos, setPhotos] = useState<(string | null)[]>(Array(PHOTO_SLOTS).fill(null));
   const [notes, setNotes] = useState('');
   const [quotedPrice, setQuotedPrice] = useState('');
+  // What the job is for: the product(s) to fit or supply and the service charge. The technician sees
+  // these and starts completing the job from them, instead of working out the product on site.
+  const [jobItems, setJobItems] = useState<BillItemRow[]>([blankItem()]);
+  const [serviceCharge, setServiceCharge] = useState('');
   const [repeatOfId, setRepeatOfId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // The reseller's own stock, so a product can be picked (name and price together) instead of typed
+  // blind - the same list the technician's parts table reads from.
+  const { data: myProducts } = useSupabaseQuery('products', {
+    filters: userId ? { seller_id: userId, seller_role: 'reseller' } : {},
+    enabled: !!userId,
+  });
   // Set the instant Submit is pressed - the state above only updates on the next render, so a quick
   // double tap could otherwise create the same job twice.
   const submittingRef = useRef(false);
@@ -136,6 +148,13 @@ function ResellerRequestDetails() {
     setCoords(lat != null && lng != null ? { latitude: lat, longitude: lng } : null);
     setNotes(editRequest.description ?? '');
     setQuotedPrice(editRequest.quoted_price != null ? String(Number(editRequest.quoted_price)) : '');
+    const savedProducts = editRequest.job_products ?? [];
+    setJobItems(
+      savedProducts.length > 0
+        ? savedProducts.map((p) => ({ description: p.name, qty: String(p.quantity), rate: String(p.cost) }))
+        : [blankItem()]
+    );
+    setServiceCharge(Number(editRequest.service_charge) > 0 ? String(Number(editRequest.service_charge)) : '');
     setExistingPhotos(editRequest.photo_urls ?? []);
     setRepeatOfId(editRequest.repeat_of_request_id ?? null);
     setHydrated(true);
@@ -200,6 +219,22 @@ function ResellerRequestDetails() {
     return path;
   }
 
+  // The product rows that were actually filled in, and what the plan comes to (products + service charge).
+  const namedItems = jobItems.filter((r) => r.description.trim());
+  const productsTotal = namedItems.reduce((sum, r) => sum + (Number(r.qty) || 0) * (Number(r.rate) || 0), 0);
+  const planTotal = productsTotal + (parseAmount(serviceCharge) ?? 0);
+
+  function updateItem(index: number, row: BillItemRow) {
+    setJobItems((prev) => prev.map((r, i) => (i === index ? row : r)));
+  }
+
+  function removeItem(index: number) {
+    setJobItems((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      return next.length > 0 ? next : [blankItem()];
+    });
+  }
+
   async function handleSubmit() {
     if (submittingRef.current) return;
     if (!userId) {
@@ -227,6 +262,28 @@ function ResellerRequestDetails() {
       showAlert('Invalid price', 'Enter a valid price in NPR, or leave it blank if you don\'t know it yet.');
       return;
     }
+    const charge = parseAmount(serviceCharge);
+    if (serviceCharge.trim() && (charge == null || charge < 0)) {
+      showAlert('Invalid service charge', 'Enter a valid service charge in NPR, or leave it blank.');
+      return;
+    }
+    if (namedItems.some((r) => !(Number(r.qty) > 0))) {
+      showAlert('Check the product quantity', 'Every product needs a quantity of at least 1.');
+      return;
+    }
+    // Only sent when there is something to say (or the job already carries it), so a job with neither
+    // saves exactly as before.
+    const plan =
+      namedItems.length > 0 || (charge ?? 0) > 0 || (editRequest && 'job_products' in editRequest)
+        ? {
+            job_products: namedItems.map((r) => ({
+              name: r.description.trim(),
+              quantity: Number(r.qty),
+              cost: Number(r.rate) || 0,
+            })),
+            service_charge: charge ?? 0,
+          }
+        : {};
     // Service is optional now - fall back to a placeholder so issue_type (not-null in the
     // database) still gets a value, and still parses back into category/action on edit.
     const issueType = service ? `${category} - ${action}` : 'General - Not specified';
@@ -270,6 +327,7 @@ function ResellerRequestDetails() {
             location_data,
             photo_urls: [...existingPhotos, ...photoUrls],
             repeat_of_request_id: validRepeatOfId,
+            ...plan,
           } as any,
         });
         saved = true;
@@ -327,6 +385,7 @@ function ResellerRequestDetails() {
         location_data: { ...coords, address: address.trim() },
         photo_urls: photoUrls,
         repeat_of_request_id: validRepeatOfId,
+        ...plan,
       });
 
       saved = true;
@@ -634,6 +693,61 @@ function ResellerRequestDetails() {
               </>
             )}
             {photos.some(Boolean) && <Text className="mt-2 text-xs text-gray-400">Tap a photo to remove it.</Text>}
+          </FormSection>
+
+          {/* zIndex: the product dropdown opens downward and must draw over the Price section below. */}
+          <FormSection
+            title="Product & service charge"
+            subtitle="Optional — the technician sees these and starts completing the job from them"
+            style={{ zIndex: 20, position: 'relative' }}
+          >
+            <FieldLabel>Product</FieldLabel>
+            <BillItemsTable
+              items={jobItems}
+              products={myProducts ?? []}
+              financeItems={[]}
+              accent="#2563EB"
+              onUpdate={updateItem}
+              onRemove={removeItem}
+              onRequestSave={() => {}}
+              onExit={() => {}}
+            />
+            <Pressable
+              onPress={() => setJobItems((prev) => [...prev, blankItem()])}
+              className="mt-2.5 flex-row items-center justify-center gap-1.5 rounded-lg border border-dashed border-blue-300 bg-blue-50 py-2.5"
+            >
+              <Ionicons name="add-circle-outline" size={16} color="#2563EB" />
+              <Text className="text-sm font-bold text-blue-700">Add product</Text>
+            </Pressable>
+
+            <View className="mt-4">
+              <FieldLabel>Service charge</FieldLabel>
+              <View className="flex-row items-center gap-2 rounded-lg border border-gray-300 bg-white px-4">
+                <Text className="text-base font-semibold text-gray-500">NPR</Text>
+                <TextInput
+                  value={serviceCharge}
+                  onChangeText={(v) => setServiceCharge(decimalInput(v))}
+                  placeholder="e.g. 500"
+                  keyboardType="numeric"
+                  accessibilityLabel="Service charge"
+                  className="flex-1 py-3 text-base"
+                />
+              </View>
+            </View>
+
+            {planTotal > 0 && (
+              <View className="mt-3 flex-row items-center gap-2 rounded-lg bg-gray-50 px-3 py-2.5">
+                <Text className="flex-1 text-[12.5px] leading-[18px] text-gray-600">
+                  Products NPR {productsTotal.toLocaleString()} + service NPR {(parseAmount(serviceCharge) ?? 0).toLocaleString()} ={' '}
+                  <Text className="font-bold text-gray-900">NPR {planTotal.toLocaleString()}</Text>
+                </Text>
+                {parseAmount(quotedPrice) !== planTotal && (
+                  <Pressable onPress={() => setQuotedPrice(String(planTotal))} hitSlop={6}>
+                    <Text className="text-[12.5px] font-bold text-blue-700">Use as price</Text>
+                  </Pressable>
+                )}
+              </View>
+            )}
           </FormSection>
 
           <FormSection title="Price" subtitle="Optional — leave blank to price it later">

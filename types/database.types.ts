@@ -195,6 +195,12 @@ export interface ServiceRequest {
   /** Set by hand when the job is created if it's really a return trip for an earlier completed job
    * (migration 0113) - never inferred from timing. Null for an ordinary job. */
   repeat_of_request_id?: string | null;
+  /** The product(s) the reseller set on the job when creating it (migration 0115) - same shape as
+   * job_cards.parts_used, and what the technician's parts list starts from. */
+  job_products?: Array<{ name: string; quantity: number; cost: number }> | null;
+  /** The service charge the reseller set on the job (migration 0115) - what the technician's labor
+   * line starts from. */
+  service_charge?: number | null;
   created_at: string;
   updated_at: string;
   /** Offered to the whole team: any of this reseller's employees can take
