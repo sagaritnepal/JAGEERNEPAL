@@ -4,7 +4,8 @@ import { View, Text, Pressable, Switch, useWindowDimensions } from 'react-native
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useRole } from '../../hooks/useAuth';
-import { useSupabaseQuery, useSupabaseUpdate } from '../../hooks/useSupabase';
+import { useSupabaseInsert, useSupabaseQuery, useSupabaseUpdate } from '../../hooks/useSupabase';
+import { pickAndUploadItemImage } from '../../utils/catalogImage';
 import { showAlert, getErrorMessage } from '../../utils/alert';
 import { useBankAccounts } from '../../hooks/useBankAccounts';
 import { useCalendarMode } from '../../hooks/useCalendarMode';
@@ -375,6 +376,39 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
     enabled: !!userId && !!role,
   });
   const updateProduct = useSupabaseUpdate('products');
+  const updateFinanceItem = useSupabaseUpdate('finance_items');
+  const createFinanceItem = useSupabaseInsert('finance_items');
+  // The item whose picture is being uploaded (its box shows it is busy).
+  const [uploadingKey, setUploadingKey] = useState<string | null>(null);
+  // A picture for an item: a product keeps it on itself; a typed item on its saved item; an item only the bills
+  // know is saved as an item, with its picture, so it has somewhere to keep it.
+  async function setPicture(row: InventoryRow) {
+    if (!userId || uploadingKey) return;
+    setUploadingKey(row.key);
+    try {
+      const url = await pickAndUploadItemImage();
+      if (!url) return;
+      if (row.productId) await updateProduct.mutateAsync({ id: row.productId, values: { image_url: url } });
+      else if (row.key.startsWith('f-')) await updateFinanceItem.mutateAsync({ id: row.key.slice(2), values: { image_url: url } });
+      else await createFinanceItem.mutateAsync({ owner_id: userId, name: row.name, image_url: url });
+    } catch (err) {
+      showAlert('Could not add the picture', getErrorMessage(err));
+    } finally {
+      setUploadingKey(null);
+    }
+  }
+  // An item's picture, tapped to add or change it (a small camera mark says so).
+  const picture = (r: InventoryRow, style: object, iconSize: number) => (
+    <Pressable onPress={() => setPicture(r)} accessibilityLabel={`${r.imageUrl ? 'Change' : 'Add'} the picture of ${r.name}`} style={{ position: 'relative' }}>
+      <ProductPicture uri={r.imageUrl} style={style} iconSize={iconSize} />
+      <View
+        className="items-center justify-center rounded-full border border-white bg-blue-600"
+        style={{ position: 'absolute', right: -4, bottom: -4, width: 18, height: 18 }}
+      >
+        <Ionicons name={uploadingKey === r.key ? 'hourglass-outline' : 'camera'} size={10} color="#fff" />
+      </View>
+    </Pressable>
+  );
   const { data: financeItems } = useSupabaseQuery('finance_items', {
     filters: userId ? { owner_id: userId } : {},
     enabled: !!userId,
@@ -517,7 +551,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
           status: 'untracked',
           value: null,
           productId: null,
-          imageUrl: null,
+          imageUrl: item.image_url ?? null,
           listed: false,
         };
       })
@@ -625,7 +659,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
 
   const itemCell = (r: InventoryRow, compact: boolean) => (
     <View className="flex-row items-center" style={{ minWidth: 0, gap: 10 }}>
-      <ProductPicture uri={r.imageUrl} style={{ width: compact ? 44 : 40, height: compact ? 44 : 40 }} iconSize={18} />
+      {picture(r, { width: compact ? 44 : 40, height: compact ? 44 : 40 }, 18)}
       <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
         <Text className="text-[13px] font-medium text-gray-900" numberOfLines={1}>
           {highlightText(r.name, search)}
@@ -660,7 +694,7 @@ export function InventoryScreen({ basePath }: { basePath: string }) {
       className="rounded-xl border border-gray-200 bg-white p-3.5"
       style={{ flexGrow: 1, flexBasis: 250, minWidth: 220, maxWidth: layout.wide ? 420 : undefined, gap: 10 }}
     >
-      <ProductPicture uri={r.imageUrl} style={{ width: '100%', height: 132 }} iconSize={32} />
+      {picture(r, { width: '100%', height: 132 }, 32)}
       <View className="flex-row items-start justify-between" style={{ gap: 8 }}>
         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
           <Text className="text-[14px] font-bold text-gray-900" numberOfLines={2}>

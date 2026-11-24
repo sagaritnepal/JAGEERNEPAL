@@ -242,6 +242,8 @@ export interface FinanceItem {
   owner_id: string;
   name: string;
   rate: number | null;
+  /** Its picture in the Inventory (0121_inventory_item_pictures.sql); null when it has none. */
+  image_url?: string | null;
   created_at: string;
   updated_at: string;
 }

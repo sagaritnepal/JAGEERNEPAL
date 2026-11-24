@@ -5,6 +5,26 @@ import { useAuthStore } from '../hooks/useAuth';
 import { showAlert } from './alert';
 import { resizeImageForUpload } from './resizeImage';
 
+/** A picture for one of the shop's own Inventory items: picked, made smaller and saved under
+ * catalog-images/items/<their id>/ (0121). Returns its address, or null when nothing was picked. */
+export async function pickAndUploadItemImage(): Promise<string | null> {
+  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  if (!permission.granted) {
+    showAlert('Photo access needed', 'Allow photo library access to add a picture.');
+    return null;
+  }
+  const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.7, allowsEditing: true, aspect: [1, 1] });
+  if (result.canceled || !result.assets[0]) return null;
+  const asset = result.assets[0];
+  const resizedUri = await resizeImageForUpload(asset.uri, asset.width, 1024);
+  const arraybuffer = await fetch(resizedUri).then((res) => res.arrayBuffer());
+  const owner = useAuthStore.getState().session?.user.id;
+  const path = `items/${owner}/${Date.now()}-${Math.random().toString(36).slice(2)}.jpg`;
+  const { error } = await supabase.storage.from('catalog-images').upload(path, arraybuffer, { contentType: 'image/jpeg' });
+  if (error) throw error;
+  return supabase.storage.from('catalog-images').getPublicUrl(path).data.publicUrl;
+}
+
 export async function pickAndUploadCatalogImage(): Promise<string | null> {
   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!permission.granted) {
