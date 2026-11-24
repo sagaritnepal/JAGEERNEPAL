@@ -6,6 +6,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '../../supabase';
+import { askSave } from '../../utils/askSave';
 import { usePartyTypes } from '../../hooks/usePartyTypes';
 import { useConfirmNewParty, withType } from './NewPartyConfirm';
 import { useAuthStore, useRole } from '../../hooks/useAuth';
@@ -1092,8 +1093,34 @@ function TransactionForm({
     }
   }
 
+  // One save at a time, from the first press: `saving` only turns on once the confirmation is answered, so a
+  // second press (or Enter) while it was still open used to open another one - and save the bill twice.
+  const saveInFlight = useRef(false);
   async function handleSave() {
-    if (saving) return;
+    if (saving || saveInFlight.current) return;
+    saveInFlight.current = true;
+    try {
+      await handleSaveOnce();
+    } finally {
+      saveInFlight.current = false;
+    }
+  }
+
+  // A new bill whose number this party already has: most likely the same bill entered again.
+  async function sameBillExists(): Promise<boolean> {
+    const no = billNo.trim();
+    if (initial || !no) return false;
+    let query = (supabase.from('business_transactions') as any)
+      .select('id', { count: 'exact', head: true })
+      .eq('owner_id', userId)
+      .eq('type', type)
+      .ilike('bill_no', no);
+    query = customerId ? query.eq('customer_id', customerId) : query.ilike('party_name', partyName.trim());
+    const { count } = await query;
+    return (count ?? 0) > 0;
+  }
+
+  async function handleSaveOnce() {
     if (isBill) {
       const validItems = items.filter(isSavableItem);
       // A sale for a service alone (an installation or repair with no parts sold, the usual bill made from
@@ -1116,6 +1143,15 @@ function TransactionForm({
           type === 'purchase' ? 'Pick a vendor' : 'Pick a customer',
           `Every ${type} books against a real ${type === 'purchase' ? 'vendor' : 'customer'}'s ledger now — tap the ${type === 'purchase' ? 'Vendor' : 'Customer'} field above and choose or add one.`
         );
+        return;
+      }
+      if (
+        (await sameBillExists()) &&
+        !(await askSave(
+          'This bill is already saved',
+          `A ${TYPE_META[type].label.toLowerCase()} bill no. ${billNo.trim()} for ${partyName.trim()} is already in your books. Save it again as another bill?`
+        ))
+      ) {
         return;
       }
       const ok = await confirmSave({
