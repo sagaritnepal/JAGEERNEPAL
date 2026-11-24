@@ -77,7 +77,9 @@ export function useSupabaseQuery<T extends TableName>(
     // `all` is part of the key: a full read and a capped read of the same
     // table + filter are different data and must never share a cache entry.
     // (Invalidations match on the leading [table], so they still reach both.)
-    queryKey: all ? [table, filters, orderBy, 'all'] : [table, filters, orderBy],
+    // A narrowed column list gets its own entry too: a few columns read for one page must never stand in for
+    // the full rows another page reads (the Dashboard's bills with no amount or date).
+    queryKey: [table, filters, orderBy, ...(all ? ['all'] : []), ...(columns !== '*' ? [columns] : [])],
     enabled,
     queryFn: async () => {
       // Cast to `any` here: postgrest-js's `.select()`/`.eq()` overloads resolve
