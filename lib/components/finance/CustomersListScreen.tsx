@@ -1279,7 +1279,7 @@ function LedgerList({ basePath }: { basePath: string }) {
       {
         // The part of the balance that is money coming in (green), blank when it runs the other way.
         key: 'receivable',
-        label: 'Receivable',
+        label: 'Debit (In)',
         width: 105,
         align: 'right',
         render: (d) =>
@@ -1294,7 +1294,7 @@ function LedgerList({ basePath }: { basePath: string }) {
       {
         // The part of the balance that is money going out (red), blank when it runs the other way.
         key: 'payable',
-        label: 'Payable',
+        label: 'Credit (Out)',
         width: 105,
         align: 'right',
         render: (d) =>

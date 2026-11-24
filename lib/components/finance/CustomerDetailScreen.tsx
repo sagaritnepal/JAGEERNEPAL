@@ -1375,8 +1375,8 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
       <Text className="text-[12.5px] text-gray-300">—</Text>
     );
   const moneyColumns: BookColumn<HistoryRow>[] = [
-    { key: 'receivable', label: 'Receivable', width: 110, align: 'right', render: (row) => cashFig(row.info ? 0 : row.debit, MONEY.in.text) },
-    { key: 'payable', label: 'Payable', width: 110, align: 'right', render: (row) => cashFig(row.info ? 0 : row.credit, MONEY.out.text) },
+    { key: 'receivable', label: 'Debit (In)', width: 110, align: 'right', render: (row) => cashFig(row.info ? 0 : row.debit, MONEY.in.text) },
+    { key: 'payable', label: 'Credit (Out)', width: 110, align: 'right', render: (row) => cashFig(row.info ? 0 : row.credit, MONEY.out.text) },
     {
       key: 'balance',
       label: 'Balance',
@@ -1681,8 +1681,8 @@ function VehicleTable({
             </View>
           ),
         },
-        { key: 'receivable', label: 'Receivable', width: 110, align: 'right', render: (g) => fig(receivable(g), MONEY.in.text) },
-        { key: 'payable', label: 'Payable', width: 110, align: 'right', render: (g) => fig(payable(g), MONEY.out.text) },
+        { key: 'receivable', label: 'Debit (In)', width: 110, align: 'right', render: (g) => fig(receivable(g), MONEY.in.text) },
+        { key: 'payable', label: 'Credit (Out)', width: 110, align: 'right', render: (g) => fig(payable(g), MONEY.out.text) },
         {
           key: 'balance',
           label: 'Balance',
