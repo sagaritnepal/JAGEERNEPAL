@@ -1085,8 +1085,8 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
     for (const r of statementAsc) {
       const t = r.tx;
       if (!t || r.info || (t.type !== 'sale' && t.type !== 'purchase')) continue;
+      // Every Sale / Purchase bill is a line - one with only a service on it (Installation) too.
       const items = itemListOf(t.items);
-      if (!items.length) continue;
       used.add(r.key);
       const side = t.type === 'purchase' ? 'v' : 'c';
       const g = groupFor(`${side}|bill|${r.key}`, [t.type === 'purchase' ? 'Purchase' : 'Sale', t.bill_no?.trim()].filter(Boolean).join(' '));
@@ -1094,6 +1094,8 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
       g.billed += r.amount;
       add(g, r, { billed: r.amount });
       for (const i of items) billOfItem.set(`${side}|${key(i)}`, g);
+      // A payment can also name the bill by its number ("E-142").
+      if (t.bill_no?.trim()) billOfItem.set(`${side}|${key(t.bill_no)}`, g);
     }
     // Then the money, by the vehicle its remark names.
     for (const r of statementAsc) {
