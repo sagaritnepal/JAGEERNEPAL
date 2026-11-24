@@ -43,6 +43,8 @@ const financeNavRank = (key: string) => {
 // nested under Report in the side panel instead of sitting flat beside Day Book and Ledger -
 // a family of report types one step in, all reachable without opening the Report page first.
 const REPORT_FAMILY: WebNavItem[] = [
+  { href: '/(reseller)/balance-sheet', label: 'Balance Sheet', icon: 'document-text' },
+  { href: '/(reseller)/report', label: 'Profit/Loss Report', icon: 'stats-chart' },
   { href: '/(reseller)/sales-report', label: 'Sales Report', icon: 'trending-up' },
   { href: '/(reseller)/purchase-report', label: 'Purchase Report', icon: 'cart' },
   { href: '/(reseller)/expense-report', label: 'Expenses Report', icon: 'receipt' },
@@ -76,6 +78,7 @@ const NAV_ITEMS: WebNavItem[] = [
 // pages), so there is no empty strip beside them on a big screen - see
 // WebSidebarShell's `wideRoutes`.
 const MAIN_WIDE_ROUTES = [
+  '/balance-sheet',
   '/company-dashboard',
   '/dashboard',
   '/shop',
@@ -242,6 +245,7 @@ export default function ResellerLayout() {
         <Tabs.Screen name="bank-balances" options={{ href: null, title: 'Available Balance' }} />
         <Tabs.Screen name="import-statement" options={{ href: null, title: 'Import Statement' }} />
         <Tabs.Screen name="report" options={{ href: null, title: 'Report' }} />
+        <Tabs.Screen name="balance-sheet" options={{ href: null, title: 'Balance Sheet' }} />
         <Tabs.Screen name="daybook" options={{ href: null, title: 'Day Book' }} />
       </Tabs>
   );

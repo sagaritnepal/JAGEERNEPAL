@@ -100,6 +100,7 @@ export default function WholesalerLayout() {
       <Tabs.Screen name="import-statement" options={{ href: null, title: 'Import Statement' }} />
       <Tabs.Screen name="inventory" options={{ href: null, title: 'Stock and Inventory' }} />
       <Tabs.Screen name="report" options={{ href: null, title: 'Report' }} />
+      <Tabs.Screen name="balance-sheet" options={{ href: null, title: 'Balance Sheet' }} />
       <Tabs.Screen name="daybook" options={{ href: null, title: 'Day Book' }} />
     </Tabs>
   );

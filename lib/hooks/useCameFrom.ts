@@ -5,7 +5,7 @@ import { router, useLocalSearchParams } from 'expo-router';
  * report with `?from=...`, and that report shows a back button to it - on a wide screen too, where report pages
  * otherwise have none (the sidebar is the way around). */
 const PLACES = {
-  'balance-sheet': { label: 'Balance Sheet', path: '/finance' },
+  'balance-sheet': { label: 'Balance Sheet', path: '/balance-sheet' },
   'profit-loss': { label: 'Profit & Loss', path: '/report' },
   dashboard: { label: 'Dashboard', path: '/company-dashboard' },
 } as const;
