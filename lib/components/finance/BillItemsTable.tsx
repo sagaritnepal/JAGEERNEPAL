@@ -34,7 +34,15 @@ interface ItemSuggestion {
   name: string;
   rate: number | null;
   hint: string;
+  /** Units on hand; undefined when nothing is known of it. */
+  qty?: number;
 }
+
+/** The item list as a small table: what is on hand, then the price. */
+const ITEM_COLUMNS = [
+  { label: 'Qty', width: 64 },
+  { label: 'Rate', width: 84 },
+];
 
 interface Props {
   items: BillItemRow[];
@@ -99,21 +107,22 @@ export const BillItemsTable = forwardRef<BillItemsTableHandle, Props>(function B
       if (!k || seen.has(k)) continue;
       seen.add(k);
       const rate = Number(p.price) > 0 ? Number(p.price) : null;
-      out.push({ key: `p-${p.id}`, name: p.name, rate, hint: stockHint(onHand(p.name) ?? Number(p.stock_level), rate, '') });
+      const q = onHand(p.name) ?? Number(p.stock_level);
+      out.push({ key: `p-${p.id}`, name: p.name, rate, qty: q, hint: stockHint(q, rate, '') });
     }
     for (const f of financeItems) {
       const k = itemKey(f.name);
       if (!k || seen.has(k)) continue;
       seen.add(k);
       const rate = f.rate != null ? Number(f.rate) : null;
-      out.push({ key: `f-${f.id}`, name: f.name, rate, hint: stockHint(onHand(f.name), rate, 'Saved item') });
+      out.push({ key: `f-${f.id}`, name: f.name, rate, qty: onHand(f.name), hint: stockHint(onHand(f.name), rate, 'Saved item') });
     }
     // Items only the bills know (bought or sold, never saved as an item) are offered too.
     for (const name of stock?.names ?? []) {
       const k = itemKey(name);
       if (seen.has(k)) continue;
       seen.add(k);
-      out.push({ key: `b-${k}`, name, rate: null, hint: stockHint(onHand(name), null, 'Used on a bill') });
+      out.push({ key: `b-${k}`, name, rate: null, qty: onHand(name), hint: stockHint(onHand(name), null, 'Used on a bill') });
     }
     return out;
   }, [products, financeItems, stock]);
@@ -129,7 +138,18 @@ export const BillItemsTable = forwardRef<BillItemsTableHandle, Props>(function B
   }, [focusedItemIndex, items, catalog]);
 
   const suggestionOptions = useMemo<SuggestOption[]>(() => {
-    const base = suggestions.map((s) => ({ key: s.key, label: s.name, hint: s.hint }));
+    // Out of stock (0) or sold before it was bought in (below 0) in red.
+    const base = suggestions.map((s) => ({
+      key: s.key,
+      label: s.name,
+      hint: s.hint,
+      cells: [
+        s.qty == null
+          ? { text: '—' }
+          : { text: s.qty === 0 ? 'Out' : s.qty.toLocaleString(undefined, { maximumFractionDigits: 3 }), color: s.qty <= 0 ? '#DC2626' : undefined },
+        { text: s.rate != null ? s.rate.toLocaleString() : '—' },
+      ],
+    }));
     const typed = focusedItemIndex != null ? (items[focusedItemIndex]?.description ?? '').trim() : '';
     const exact = typed && catalog.some((c) => c.name.trim().toLowerCase() === typed.toLowerCase());
     return typed && !exact && onCreateItem ? [...base, { key: '__new__', label: `Add "${typed}" as new stock item`, kind: 'add' as const }] : base;
@@ -259,6 +279,8 @@ export const BillItemsTable = forwardRef<BillItemsTableHandle, Props>(function B
                 value={row.description}
                 onChangeText={(v) => onUpdate(index, { ...row, description: v })}
                 options={focusedItemIndex === index ? suggestionOptions : []}
+                columns={ITEM_COLUMNS}
+                listMinWidth={420}
                 onSelectOption={async (opt, via) => {
                   if (opt.key === '__new__') {
                     const name = row.description.trim();

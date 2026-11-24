@@ -13,6 +13,14 @@ export interface SuggestOption {
   sub?: string | null;
   /** 'add' draws the row as a "+ Add ..." action instead of a match. */
   kind?: 'add';
+  /** Figures drawn in the list's `columns`, right-aligned, one per column (in place of `hint`). */
+  cells?: { text: string; color?: string }[];
+}
+
+/** Columns the list draws as a small table: a title row, then each option's `cells` under them. */
+export interface SuggestColumn {
+  label: string;
+  width: number;
 }
 
 export type PickVia = 'enter' | 'tab' | 'click';
@@ -44,6 +52,9 @@ interface Props {
   /** Enter on a name nobody has takes the list's "Add ... as new" row - the owner then asks for confirmation -
    * instead of passing the typed name on unchecked. */
   enterAddsNew?: boolean;
+  /** Draw the list as a small table (name first, then these columns), at least `listMinWidth` wide. */
+  columns?: SuggestColumn[];
+  listMinWidth?: number;
 }
 
 /** A text box with a typeahead list that is fully driven from the keyboard:
@@ -70,7 +81,11 @@ export function SuggestInput({
   compact,
   showWhenEmpty,
   enterAddsNew,
+  columns,
+  listMinWidth,
 }: Props) {
+  // A table list is one size smaller and its rows tighter, so more fits without crowding.
+  const small = compact || !!columns;
   const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(-1);
 
@@ -191,25 +206,36 @@ export function SuggestInput({
             top: '100%',
             left: 0,
             right: 0,
+            ...(listMinWidth ? { minWidth: listMinWidth } : null),
             zIndex: 50,
             marginTop: 2,
             boxShadow: '0 10px 28px rgba(16,24,40,0.14)',
           }}
         >
+          {columns && (
+            <View className="flex-row items-center border-b border-gray-100 px-3 pb-1 pt-0.5">
+              <Text className="flex-1 text-[10px] font-semibold uppercase tracking-wide text-gray-400">Item</Text>
+              {columns.map((c) => (
+                <Text key={c.label} className="text-right text-[10px] font-semibold uppercase tracking-wide text-gray-400" style={{ width: c.width }}>
+                  {c.label}
+                </Text>
+              ))}
+            </View>
+          )}
           <ScrollView style={{ maxHeight: 280 }} keyboardShouldPersistTaps="handled">
             {options.map((o, i) => (
               <Pressable
                 key={o.key}
                 tabIndex={-1}
                 onPress={() => choose(o, 'click')}
-                className={`flex-row items-center justify-between px-3 py-2 ${o.kind === 'add' && i > 0 ? 'mt-1 border-t border-gray-100' : ''}`}
+                className={`flex-row items-center justify-between px-3 ${columns ? 'py-1.5' : 'py-2'} ${o.kind === 'add' && i > 0 ? 'mt-1 border-t border-gray-100' : ''}`}
                 style={{ backgroundColor: i === activeIndex ? `${accent}14` : 'transparent' }}
               >
                 {o.kind === 'add' ? (
                   <>
                     <Ionicons name="add-circle" size={16} color={accent} />
                     <Text
-                      className={`ml-2 flex-1 font-semibold ${compact ? 'text-xs' : 'text-sm'}`}
+                      className={`ml-2 flex-1 font-semibold ${small ? 'text-xs' : 'text-sm'}`}
                       style={{ color: accent }}
                       numberOfLines={1}
                     >
@@ -218,7 +244,7 @@ export function SuggestInput({
                   </>
                 ) : (
                   <View className="flex-1" style={{ minWidth: 0 }}>
-                    <Text className={`text-gray-900 ${compact ? 'text-xs' : 'text-sm'}`} numberOfLines={1}>
+                    <Text className={`text-gray-900 ${small ? 'text-xs' : 'text-sm'}`} numberOfLines={1}>
                       {highlightText(o.label, value)}
                     </Text>
                     {!!o.sub && (
@@ -228,7 +254,18 @@ export function SuggestInput({
                     )}
                   </View>
                 )}
-                {!!o.hint && <Text className={`ml-2 text-gray-400 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>{o.hint}</Text>}
+                {columns && o.kind !== 'add'
+                  ? columns.map((c, ci) => (
+                      <Text
+                        key={c.label}
+                        className="text-right text-[11px] text-gray-500"
+                        style={{ width: c.width, color: o.cells?.[ci]?.color, fontVariant: ['tabular-nums'] }}
+                        numberOfLines={1}
+                      >
+                        {o.cells?.[ci]?.text ?? ''}
+                      </Text>
+                    ))
+                  : !!o.hint && <Text className={`ml-2 text-gray-400 ${small ? 'text-[10px]' : 'text-[11px]'}`}>{o.hint}</Text>}
               </Pressable>
             ))}
           </ScrollView>
