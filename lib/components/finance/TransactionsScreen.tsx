@@ -904,7 +904,7 @@ function TransactionForm({
     if (initial?.service_charges?.length) return initial.service_charges.map((s) => ({ name: s.name, amount: String(s.amount) }));
     // A bill saved before the table existed carried one lump installation charge.
     if (initial?.installation_charge) return [{ name: 'Installation', amount: String(initial.installation_charge) }];
-    if (jobPrefill?.services?.length) return jobPrefill.services.map((s) => ({ name: s.name, amount: String(s.amount) }));
+    if (jobPrefill?.services?.length) return jobPrefill.services.map((s) => ({ name: s.name, amount: s.amount > 0 ? String(s.amount) : '' }));
     if (jobPrefill?.installation) return [{ name: 'Installation', amount: String(jobPrefill.installation) }];
     return [{ name: '', amount: '' }];
   });
@@ -3320,11 +3320,18 @@ export function TransactionsScreen({ basePath }: { basePath?: string }) {
     for (const job of ordered) {
       const card = billJobs.cards.find((c) => c.service_request_id === job.id);
       const tag = ticketLabel(job.ticket_no);
-      for (const p of (card?.parts_used ?? []).filter((p) => p.name?.trim())) {
+      // The parts the technician recorded; else the products the reseller planned on the job.
+      const used = (card?.parts_used ?? []).filter((p) => p.name?.trim());
+      const parts = used.length ? used : (job.job_products ?? []).filter((p) => p.name?.trim());
+      for (const p of parts) {
         items.push({ description: p.name, qty: String(p.quantity || 1), rate: String(p.cost || 0) });
       }
-      const labor = Number(card?.labor_cost) || 0;
-      if (labor > 0) services.push({ name: ordered.length > 1 && tag ? `Installation - ${tag}` : 'Installation', amount: labor });
+      // The job's own service ("CCTV & Surveillance - Installation") is the bill's service line, picked
+      // already: at the technician's labor charge, else the service charge set on the job (else left for
+      // the amount to be typed).
+      const service = job.issue_type?.trim() && job.issue_type.trim() !== 'General - Not specified' ? job.issue_type.trim() : 'Installation';
+      const charge = Number(card?.labor_cost) || Number(job.service_charge) || 0;
+      services.push({ name: ordered.length > 1 && tag ? `${service} - ${tag}` : service, amount: charge });
     }
     const first = ordered[0];
     const refs = ordered
