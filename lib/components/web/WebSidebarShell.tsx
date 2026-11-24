@@ -31,8 +31,8 @@ function hasActive(item: WebNavItem, isActive: (href: string) => boolean): boole
 function NavRow({ item, depth, isActive }: { item: WebNavItem; depth: number; isActive: (href: string) => boolean }) {
   const active = isActive(item.href);
   const top = depth === 0;
-  // A group (Finance, Report) is a dropdown: open while one of its pages is showing, and a second click on
-  // its name closes it again.
+  // A group (Finance, Report) is a dropdown: open while one of its pages is showing; a click on its name
+  // opens or closes it (it never leaves the page).
   const insideActive = !!item.children && hasActive(item, isActive);
   const [openState, setOpenState] = useState<boolean | null>(null);
   const open = openState ?? insideActive;
@@ -43,12 +43,10 @@ function NavRow({ item, depth, isActive }: { item: WebNavItem; depth: number; is
     <View>
       <Pressable
         onPress={() => {
+          // A group (Finance, Report) has no page of its own here: its name only opens and closes its list.
           if (item.children) {
-            if (open) {
-              setOpenState(false);
-              return;
-            }
-            setOpenState(true);
+            setOpenState(!open);
+            return;
           }
           router.push(item.href as any);
         }}
