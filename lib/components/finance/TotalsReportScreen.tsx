@@ -1144,6 +1144,26 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
       </Text>
     ),
   };
+  // Who a bill was with: a saved customer / vendor's name opens their own ledger page.
+  const partyOf = (e: Entry) => (kind !== 'expense' ? (e.nav.kind === 'party' ? e.nav.partyId : e.tx?.customer_id ?? null) : null);
+  const whoCell = (e: Entry) => {
+    const name = highlightText(e.category || e.party || '—', search);
+    const pid = partyOf(e);
+    if (!pid) {
+      return (
+        <Text className="text-[13px] font-medium text-gray-900" numberOfLines={1}>
+          {name}
+        </Text>
+      );
+    }
+    return (
+      <Pressable onPress={() => router.push(`${basePath}/customer/${pid}` as never)} hitSlop={4} style={{ alignSelf: 'flex-start', maxWidth: '100%' }}>
+        <Text className="text-[13px] font-semibold text-blue-700" numberOfLines={1}>
+          {name}
+        </Text>
+      </Pressable>
+    );
+  };
   const billColumns: BookColumn<Entry>[] = layout.full
     ? [
         { key: 'sn', label: 'SN', width: 56, render: (_e, i) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text> },
@@ -1176,11 +1196,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
         {
           key: 'who',
           label: pickWord.one,
-          render: (e) => (
-            <Text className="text-[13px] font-medium text-gray-900" numberOfLines={1}>
-              {highlightText(e.category || e.party || '—', search)}
-            </Text>
-          ),
+          render: whoCell,
         },
         ...(showItem ? [itemColumn] : []),
         ...(showModel ? [modelColumn] : []),
@@ -1201,9 +1217,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
           label: pickWord.one,
           render: (e) => (
             <View style={{ minWidth: 0, gap: 2 }}>
-              <Text className="text-[13px] font-medium text-gray-900" numberOfLines={1}>
-                {highlightText(e.category || e.party || '—', search)}
-              </Text>
+              {whoCell(e)}
               <Text className="text-[11px] text-gray-400" numberOfLines={1}>
                 {[
                   [e.itemNames, e.modelNames].filter(Boolean).join(' · ') || null,
