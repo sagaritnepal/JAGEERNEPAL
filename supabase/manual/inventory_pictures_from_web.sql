@@ -72,5 +72,36 @@ update finance_items f
  where f.id = v.id
    and coalesce(f.image_url, '') = '';
 
+-- Third round, qualitycomputer.com.np again: more of the shop's own pictures for the same kind of product.
+update finance_items f
+   set image_url = v.url, updated_at = now()
+  from (values
+    ('a346f9b8-5034-41f8-b99b-88943505c9a2'::uuid, 'https://qualitycomputer.com.np/web/image/product.template/40766/image_512/Hikvision%20DS%202CD1323G0E-I%202MP%20Dome?unique=9c9644f'),  -- HIKVISION 2MP DOME
+    ('75d0b04d-ee8d-4d17-b5e1-8a26138845b6'::uuid, 'https://qualitycomputer.com.np/web/image/product.template/40783/image_512/Hikvision%20DS-2CD1143G0E-I%204MP%20Dome?unique=9c9644f'),  -- HIKVISION 4MP IP DOME
+    ('0cea3e52-1dc6-4740-b53f-9b4fb210e1c1'::uuid, 'https://qualitycomputer.com.np/web/image/product.template/40762/image_512/Hikvision%20DS%202CD1023G0E-I%202MP%20Bullet?unique=9c9644f'),  -- HIKVISION 2MP IP BULLET
+    ('6db0ba82-37a9-4fed-8ffb-0b1451b65cec'::uuid, 'https://qualitycomputer.com.np/web/image/product.template/50007/image_512/Kaspersky%20Plus%20:%20Security%20Performance%20and%20Privacy%202023%203%20Devices%20%7C%201%20Year%20%7C%201%20Key?unique=9c9644f'),  -- KASPERSKY ANTIVIRUS 3 USERS
+    ('85c30774-b266-4a6b-a480-3ca0fda037e7'::uuid, 'https://qualitycomputer.com.np/web/image/product.template/49831/image_512/Hiksemi%20E100%20128GB%20SATA%203.0%20SSD?unique=ec4b3fa'),  -- SSD 128
+    ('3db2cb6a-711f-4fe0-8bae-d18c4c57eab0'::uuid, 'https://qualitycomputer.com.np/web/image/product.template/50590/image_512/Hiksemi%20E100%20256GB%20SATA%203.0%20SSD?unique=ec4b3fa'),  -- SSD 265GB
+    ('98c87d88-1410-4d91-839c-49b253e4ffa1'::uuid, 'https://qualitycomputer.com.np/web/image/product.template/44902/image_512/SP%20Laptop%20RAM%204GB%20DDR4%202666Mhz?unique=9c9644f'),  -- RAM DDR 4GB
+    ('6302e127-c5b7-4cb3-a18e-c42dd0771e05'::uuid, 'https://qualitycomputer.com.np/web/image/product.template/53389/image_512/WD%201TB%20Purple%20HDD%20Surveillance%20Internal%20WD10PURZ?unique=9c9644f'),  -- HARDDISK 1 TB
+    ('7387a0ca-c125-40cd-94b3-0afd970cfcc8'::uuid, 'https://qualitycomputer.com.np/web/image/product.template/40796/image_512/Hikvision%20Fingerprint%20Access%20Control%20Terminal%20%28DS-K1T804BEF%29?unique=9c9644f'),  -- ACCESS CONTROL
+    ('d67ca786-4076-4dd8-bb7e-672936e7910c'::uuid, 'https://qualitycomputer.com.np/web/image/product.template/40796/image_512/Hikvision%20Fingerprint%20Access%20Control%20Terminal%20%28DS-K1T804BEF%29?unique=9c9644f'),  -- ACCESS CONTROL (STANDARD)
+    ('59949763-a1b5-47be-b815-ff52219aca6d'::uuid, 'https://qualitycomputer.com.np/web/image/product.template/49108/image_512/BenQ%2022%22%20FHD%20Monitor%20%28GW2283%29?unique=9c9644f'),  -- ENTER 22 inch MONITOR
+    ('0cef2d1a-ebc4-4987-91a8-7c2dc0d48434'::uuid, 'https://qualitycomputer.com.np/web/image/product.template/52000/image_512/Intex%20IT-1902%2019%22%2060Hz%20LED%20Monitor?unique=9c9644f'),  -- MONITOR 19 INCH
+    ('49bda06a-a315-4711-bfb7-03d7058616c7'::uuid, 'https://qualitycomputer.com.np/web/image/product.template/51466/image_512/Ruijie%20Reyee%20RG-ES106F-P%204-Port%2010-100mbps%20POE%20With%202-Port%20FE%20Unmanaged%20Metal%20Switch?unique=9c9644f'),  -- POE SWITCH 4 PORT
+    ('ffae0841-7e78-4aa9-b140-f66083149040'::uuid, 'https://qualitycomputer.com.np/web/image/product.template/44616/image_512/Hikvision%208-Port%20POE%20Switch%20DS-3E0310P-E-M%20%28B%29?unique=9c9644f'),  -- POE SWITCH 8 PORT
+    ('1550e1d2-e293-40dd-b18b-72825ceaed81'::uuid, 'https://qualitycomputer.com.np/web/image/product.template/44616/image_512/Hikvision%208-Port%20POE%20Switch%20DS-3E0310P-E-M%20%28B%29?unique=9c9644f'),  -- POE SWITCH 8 PORT WITH GIGA
+    ('7d8512ee-7dce-46eb-a9ac-bfa0aed42169'::uuid, 'https://qualitycomputer.com.np/web/image/product.template/44616/image_512/Hikvision%208-Port%20POE%20Switch%20DS-3E0310P-E-M%20%28B%29?unique=9c9644f'),  -- POE SWITCH 8 PORT+2 GIGA
+    ('4a35e818-d512-4ccc-a708-2ce27a752897'::uuid, 'https://qualitycomputer.com.np/web/image/product.template/44474/image_512/Dell%20Laptop%20Adapter%2019.5V-3.34A-65W%20%28Big%20Pin%29?unique=9c9644f'),  -- LAPTOP ADAPTOR DELL
+    ('e078b1f4-f1b5-4263-8152-da914fe448e4'::uuid, 'https://qualitycomputer.com.np/web/image/product.template/49224/image_512/Okaya%207.2AH-12V%20UPS%20Battery?unique=9c9644f'),  -- UPS BATTERY
+    ('0188852e-e568-46c6-a9bc-71088cd38634'::uuid, 'https://qualitycomputer.com.np/web/image/product.template/53143/image_512/Marsriva%20Smart%20Mini%20DC%20UPS%20KP3%20%2810000mAh%29?unique=9c9644f'),  -- DC UPS HITECH BATTERY 8800 MAH
+    ('fdf05a93-e2f4-4d8a-ae2f-8b949ef712b5'::uuid, 'https://qualitycomputer.com.np/web/image/product.template/51453/image_512/Rapoo%20B20%20Silent%20Wireless%20Optical%20Mouse%20%281200%20DPI%29?unique=9c9644f'),  -- MOUSE WIRELESS
+    ('ba191723-8f15-4e15-9c1e-270d485f82c2'::uuid, 'https://qualitycomputer.com.np/web/image/product.template/53449/image_512/Havit%20MP837%20Gaming%20Mouse%20Pad?unique=9c9644f'),  -- MOUSE PAD
+    ('8e33b87e-a36b-4769-a832-269aff7c9d72'::uuid, 'https://qualitycomputer.com.np/web/image/product.template/51114/image_512/Fantech%20ATOM63%20MK874v2%20Mechanical%20Keyboard?unique=9c9644f'),  -- Mechanical Keyboard
+    ('c6af9d1e-42c1-437d-ba3f-e55ca018cf75'::uuid, 'https://qualitycomputer.com.np/web/image/product.template/41020/image_512/%5B90464%5D%20UGREEN%20KU001%20Wired%20USB%20Keyboard?unique=9c9644f')  -- KEYBOARD NORMAL
+  ) as v(id, url)
+ where f.id = v.id
+   and coalesce(f.image_url, '') = '';
+
 -- Check: the items that got a picture.
 select name, image_url from finance_items where image_url is not null order by name;
