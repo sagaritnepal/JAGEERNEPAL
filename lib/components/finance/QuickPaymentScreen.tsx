@@ -6,7 +6,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../hooks/useAuth';
-import { useSupabaseInsert, useSupabaseQuery, useSupabaseUpdate } from '../../hooks/useSupabase';
+import { useSupabaseInsert, useSupabaseQuery, useSupabaseRow, useSupabaseUpdate } from '../../hooks/useSupabase';
 import { useBankAccounts } from '../../hooks/useBankAccounts';
 import { usePhoneContacts } from '../../hooks/usePhoneContacts';
 import { useScanBill } from '../../hooks/useScanBill';
@@ -50,11 +50,12 @@ function emptyPaymentRow(): PaymentRow {
 }
 
 export function QuickPaymentScreen() {
-  const { type } = useLocalSearchParams<{ type?: string }>();
+  const { type, edit } = useLocalSearchParams<{ type?: string; edit?: string }>();
   // Received and Payment Out are the same (kept-mounted) route with a
   // different ?type - key the form on it so a half-filled Received form
   // never carries over into Payment Out and gets saved the wrong way round.
-  return <QuickPaymentForm key={type === 'out' ? 'out' : 'in'} />;
+  // An entry opened for editing (?edit=<id>) gets a form of its own too.
+  return <QuickPaymentForm key={`${type === 'out' ? 'out' : 'in'}-${edit ?? 'new'}`} />;
 }
 
 function QuickPaymentForm() {
@@ -65,8 +66,10 @@ function QuickPaymentForm() {
   // voice* params arrive from the Finance dashboard's voice-command button,
   // routed here the same way a Shortcuts tap is (?type=in/out) - applied
   // once on mount below, same "review before save" rule as Scan Bill.
-  const { type, voiceAmount, voiceParty, voiceDate, voiceNote } = useLocalSearchParams<{
+  const { type, voiceAmount, voiceParty, voiceDate, voiceNote, edit } = useLocalSearchParams<{
     type?: string;
+    /** An entry to change (from a ledger's Edit): the form opens with it and Save updates it. */
+    edit?: string;
     voiceAmount?: string;
     voiceParty?: string;
     voiceDate?: string;
@@ -199,6 +202,9 @@ function QuickPaymentForm() {
     return round2(billed - (carPaid.get(`id:${vendor.id}|${c}`) ?? 0));
   };
   const insertEntry = useSupabaseInsert(targetTable);
+  const updateEntry = useSupabaseUpdate(targetTable);
+  // The entry being edited (a ledger's Edit opens it here), if any.
+  const { data: editing } = useSupabaseRow(targetTable, edit || undefined);
   const createCustomer = useSupabaseInsert('customers');
   const updateCustomer = useSupabaseUpdate('customers');
   const bankAccounts = useBankAccounts(userId);
@@ -339,6 +345,10 @@ function QuickPaymentForm() {
         const asked = await askNewParty({ name: trimmedName, kind: payTarget === 'vendor' ? 'vendor' : 'customer' });
         if (!asked) return;
         customer = await createCustomer.mutateAsync({ owner_id: userId, name: asked.name, phone: null, ...withType(asked) });
+      }
+      if (editing) {
+        await saveEdit(customer.id, value, note.trim() || null);
+        return;
       }
       await insertEntry.mutateAsync({
         [payTarget === 'vendor' ? 'vendor_id' : 'customer_id']: customer.id,
@@ -500,6 +510,57 @@ function QuickPaymentForm() {
     }
   }
 
+  // Fill the form from the entry being edited, once its person is known.
+  const editLoaded = useRef(false);
+  useEffect(() => {
+    if (!editing || editLoaded.current || !customers) return;
+    editLoaded.current = true;
+    const partyId = (editing as any)[payTarget === 'vendor' ? 'vendor_id' : 'customer_id'] as string;
+    const person = customers.find((c) => c.id === partyId) ?? null;
+    const name = person?.name ?? '';
+    setSelectedCustomer(person);
+    setCustomerName(name);
+    setAmount(String(editing.amount));
+    setNote(editing.note ?? '');
+    setRows([{ ...emptyPaymentRow(), customerName: name, selectedCustomer: person, amount: String(editing.amount), note: editing.note ?? '' }]);
+    if (editing.entry_date) setDate(editing.entry_date);
+    setReceiptNo(editing.receipt_no ?? '');
+    setReceiptNoTouched(true);
+    setBankAccountId(editing.bank_account_id ?? null);
+  }, [editing, customers, payTarget]);
+
+  // Save the edited entry in place (on the same person's ledger, or another's) and go back to where it was opened.
+  async function saveEdit(partyId: string, value: number, entryNote: string | null) {
+    if (!editing) return;
+    await updateEntry.mutateAsync({
+      id: editing.id,
+      values: {
+        [payTarget === 'vendor' ? 'vendor_id' : 'customer_id']: partyId,
+        amount: value,
+        note: entryNote,
+        bank_account_id: bankAccountId,
+        entry_date: date || null,
+        receipt_no: receiptNo.trim() || null,
+      } as any,
+    });
+    showAlert(isOut ? 'Paid entry updated' : 'Received entry updated', `NPR ${formatMoney(value)} saved.`);
+    if (router.canGoBack()) router.back();
+  }
+
+  // Shown on top of the form while an entry is being changed.
+  const editBanner = editing ? (
+    <View className="mb-4 flex-row flex-wrap items-center justify-between rounded-xl border px-4 py-3" style={{ borderColor: '#FCD34D', backgroundColor: '#FFFBEB', gap: 8 }}>
+      <Text className="text-[13px] font-semibold" style={{ color: '#92400E' }}>
+        {`Editing ${isOut ? 'payment' : 'receipt'}${editing.receipt_no ? ` no. ${editing.receipt_no}` : ''} - Save updates it, nothing new is added.`}
+      </Text>
+      <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace(`/(reseller)/quick-payment?type=${isOut ? 'out' : 'in'}` as never))} hitSlop={6}>
+        <Text className="text-[13px] font-bold" style={{ color: '#92400E' }}>
+          Cancel edit
+        </Text>
+      </Pressable>
+    </View>
+  ) : null;
+
   async function handleSaveAll() {
     if (!userId) return;
     // A row with a name but no valid amount (or an amount but no name) used
@@ -515,6 +576,10 @@ function QuickPaymentForm() {
       return;
     }
     const validRows = rows.filter((r) => r.customerName.trim() && Number(r.amount) > 0);
+    if (editing && validRows.length > 1) {
+      showAlert('One entry at a time', 'You are changing one saved entry - remove the extra rows, or save them separately after this.');
+      return;
+    }
     if (validRows.length === 0) {
       showAlert('Add a payment', 'Add at least one person and a valid amount to record.');
       return;
@@ -555,6 +620,10 @@ function QuickPaymentForm() {
         }
         if (customer !== row.selectedCustomer) {
           updateRow(row.key, { selectedCustomer: customer, customerName: customer.name });
+        }
+        if (editing) {
+          await saveEdit(customer.id, round2(Number(row.amount)), [row.item.trim(), row.note.trim()].filter(Boolean).join(' · ') || null);
+          return;
         }
         await insertEntry.mutateAsync({
           [payTarget === 'vendor' ? 'vendor_id' : 'customer_id']: customer.id,
@@ -739,6 +808,7 @@ function QuickPaymentForm() {
     return (
       <ScrollView className="flex-1 bg-gray-50" contentContainerStyle={{ paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
         <View className="px-8 pt-6">
+          {editBanner}
           <View className="flex-row" style={{ gap: 24 }}>
             <View className="flex-1" style={{ minWidth: 0, maxWidth: 1500 }}>
               {/* Date/Receipt No. and Payment method apply to every row in
@@ -937,6 +1007,7 @@ function QuickPaymentForm() {
       extraScrollHeight={20}
       keyboardShouldPersistTaps="handled"
     >
+      {editBanner}
       <View className={`mb-3 flex-row items-center gap-2 rounded-2xl p-4 ${meta.bg}`}>
         <Ionicons name={meta.icon} size={20} color={meta.color} />
         <Text className="text-base font-bold" style={{ color: meta.color }}>

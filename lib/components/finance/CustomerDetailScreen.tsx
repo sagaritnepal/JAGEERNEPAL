@@ -1134,6 +1134,12 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
 
   // A linked bill opens its detail view; a manual entry opens in an edit popup.
   function openRow(row: HistoryRow) {
+    // Money received from a customer, or paid to a vendor, opens in the Received / Paid form it was entered on.
+    const formEntry = row.manual && !journalOf((row.ledger ?? row.vendor)?.note) ? (row.ledger ?? row.vendor) : undefined;
+    if (formEntry && formEntry.entry_type === 'credit') {
+      router.push(`${basePath}/quick-payment?type=${row.vendor ? 'out' : 'in'}&edit=${formEntry.id}` as never);
+      return;
+    }
     if (row.tx) {
       setViewingTx(row.tx);
     } else if (row.vendor && row.manual) {
