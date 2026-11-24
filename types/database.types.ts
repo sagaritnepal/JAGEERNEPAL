@@ -294,6 +294,24 @@ export interface Customer {
   updated_at: string;
 }
 
+/** One staff member of a shop and what they may open in its portal (0122_staff_access.sql). */
+export interface StaffAccess {
+  id: string;
+  owner_id: string;
+  member_id: string;
+  member_name: string;
+  member_phone: string | null;
+  work_role: 'manager' | 'accountant' | 'sales' | 'technician' | 'supervisor';
+  job_title: string | null;
+  work_start_time: string | null;
+  work_end_time: string | null;
+  /** Portal section -> 'none' | 'view' | 'edit'; a section not named is 'none'. */
+  access: Record<string, 'none' | 'view' | 'edit'>;
+  status: 'active' | 'paused';
+  created_at: string;
+  updated_at: string;
+}
+
 /** A label a reseller sorts their parties by - Customer, Vendor, Employee or
  * any they add themselves (0084_party_types.sql). */
 export interface PartyType {
@@ -699,6 +717,7 @@ export interface Database {
         Update: Partial<RewardPointEvent>;
         Relationships: [];
       };
+      staff_access: { Row: StaffAccess; Insert: Partial<StaffAccess>; Update: Partial<StaffAccess>; Relationships: [] };
       technician_employment: {
         Row: TechnicianEmployment;
         Insert: Partial<TechnicianEmployment>;

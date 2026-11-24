@@ -72,12 +72,14 @@ const NAV_ITEMS: WebNavItem[] = [
         s.key === 'report' ? { href: s.href, label: s.label, icon: s.icon, children: REPORT_FAMILY } : { href: s.href, label: s.label, icon: s.icon }
       ),
   },
+  { href: '/(reseller)/staff', label: 'Staff & Access', icon: 'people' },
 ];
 
 // Every other reseller page uses the wider content column too (like Finance's
 // pages), so there is no empty strip beside them on a big screen - see
 // WebSidebarShell's `wideRoutes`.
 const MAIN_WIDE_ROUTES = [
+  '/staff',
   '/balance-sheet',
   '/company-dashboard',
   '/dashboard',
@@ -246,6 +248,7 @@ export default function ResellerLayout() {
         <Tabs.Screen name="import-statement" options={{ href: null, title: 'Import Statement' }} />
         <Tabs.Screen name="report" options={{ href: null, title: 'Report' }} />
         <Tabs.Screen name="balance-sheet" options={{ href: null, title: 'Balance Sheet' }} />
+        <Tabs.Screen name="staff" options={{ href: null, title: 'Staff & Access' }} />
         <Tabs.Screen name="daybook" options={{ href: null, title: 'Day Book' }} />
       </Tabs>
   );
