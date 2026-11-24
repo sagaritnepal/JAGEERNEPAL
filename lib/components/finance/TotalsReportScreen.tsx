@@ -5,7 +5,8 @@ import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../hooks/useAuth';
 import { useCameFrom } from '../../hooks/useCameFrom';
-import { useSupabaseQuery, useSupabaseRow } from '../../hooks/useSupabase';
+import { useSupabaseDelete, useSupabaseQuery, useSupabaseRow } from '../../hooks/useSupabase';
+import { showAlert, getErrorMessage } from '../../utils/alert';
 import { usePartyTypes } from '../../hooks/usePartyTypes';
 import { isStaffLedgerType, reportKindOfType, usePartyDestination } from '../../hooks/usePartyDestination';
 import { isSettledOnTheSpot } from '../../hooks/useAccountBalances';
@@ -1031,9 +1032,36 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
   // A Sale or Purchase bill's expanded strip: its ledger type, its actual line items (product, qty,
   // rate, amount) read straight from the bill, and a way to still open it in full. No bill number or
   // date here - the number moved to the Remark column, and the date is already the row's own.
+  // A bill can be deleted right from the report (its ledger entry goes with it).
+  const deleteBill = useSupabaseDelete('business_transactions');
+  const askDeleteBill = (tx: BusinessTransaction) =>
+    showAlert(
+      `Delete this ${tx.type} bill?`,
+      `NPR ${money(Number(tx.amount))}${tx.bill_no ? ` · Bill ${tx.bill_no}` : ''}${tx.party_name ? ` · ${tx.party_name}` : ''}. Its amount comes off the ledger and the reports too. This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteBill.mutateAsync(tx.id);
+            } catch (err) {
+              showAlert('Could not delete', getErrorMessage(err));
+            }
+          },
+        },
+      ]
+    );
   const billDetailPanel = (e: Entry) => {
     if ((kind !== 'sale' && kind !== 'purchase') || !expandedBills.has(e.id)) return null;
-    const items = e.tx?.items ?? [];
+    // The bill's lines: its products, then its services (Installation ...) - a bill of services only too.
+    const items = [
+      ...(e.tx?.items ?? []),
+      ...(e.tx?.service_charges ?? [])
+        .filter((c) => Number(c.amount) > 0)
+        .map((c) => ({ description: c.name || 'Service', qty: '—' as unknown as number, rate: Number(c.amount), amount: Number(c.amount) })),
+    ];
     return (
       <View className="border-b border-gray-200 bg-gray-50 px-4 py-3" style={{ gap: 10 }}>
         {!!e.ledgerType && (
@@ -1082,10 +1110,16 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
           <Text className="text-[12.5px] text-gray-500">No products listed on this bill.</Text>
         )}
         {!!e.tx && (
-          <Pressable onPress={() => setViewingTx(e.tx!)} hitSlop={6} className="flex-row items-center self-start" style={{ gap: 4 }}>
-            <Text className="text-[12px] font-bold text-blue-600">View full bill</Text>
-            <Ionicons name="arrow-forward" size={12} color="#2563EB" />
-          </Pressable>
+          <View className="flex-row items-center" style={{ gap: 20 }}>
+            <Pressable onPress={() => setViewingTx(e.tx!)} hitSlop={6} className="flex-row items-center" style={{ gap: 4 }}>
+              <Text className="text-[12px] font-bold text-blue-600">View full bill</Text>
+              <Ionicons name="arrow-forward" size={12} color="#2563EB" />
+            </Pressable>
+            <Pressable onPress={() => askDeleteBill(e.tx!)} hitSlop={6} className="flex-row items-center" style={{ gap: 4 }}>
+              <Ionicons name="trash-outline" size={13} color="#DC2626" />
+              <Text className="text-[12px] font-bold text-red-600">Delete bill</Text>
+            </Pressable>
+          </View>
         )}
       </View>
     );
@@ -1114,6 +1148,21 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
     ? [
         { key: 'sn', label: 'SN', width: 56, render: (_e, i) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text> },
         { key: 'date', label: 'Date', width: 140, render: (e) => <Text className="text-[12.5px] text-gray-600">{toBsHistoryLabel(e.date.slice(0, 10))}</Text> },
+        // The bill's number, beside its remark (a Sales / Purchase bill).
+        ...(showsBillDetail
+          ? [
+              {
+                key: 'billno',
+                label: 'Bill No.',
+                width: 110,
+                render: (e: Entry) => (
+                  <Text className="text-[12.5px] font-semibold text-gray-800" numberOfLines={1}>
+                    {e.billNo || '—'}
+                  </Text>
+                ),
+              },
+            ]
+          : []),
         {
           key: 'bill',
           label: showsBillDetail ? 'Remark' : 'Bill No.',
