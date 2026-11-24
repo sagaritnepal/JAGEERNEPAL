@@ -18,7 +18,7 @@ import { useBankAccounts } from '../../hooks/useBankAccounts';
 import { usePartyTypes } from '../../hooks/usePartyTypes';
 import { useFreshLedgerArea } from '../../hooks/useFreshLedgerArea';
 import { journalOf } from '../../utils/journalVoucher';
-import { itemListOf, itemNamesOf, sellsVehicles } from '../../utils/accountFeatures';
+import { itemNamesOf, sellsVehicles } from '../../utils/accountFeatures';
 import { formatMoney, round2 } from '../../utils/money';
 import { BankAccountPickerModal } from './BankAccountPickerModal';
 import { EntryWhenFields, PartyMoveField, PaymentMethodButton, stampOf, timeOf, useEntryParty, useEntryWhen } from './EntryEditParts';
@@ -1079,32 +1079,25 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
       if (r.reference && !g.refs.includes(r.reference)) g.refs.push(r.reference);
     };
     const used = new Set<string>();
-    // The item a payment can name -> the bill it is on (the latest such bill).
-    const billOfItem = new Map<string, VehicleGroup>();
     // The bills first, one line each.
     for (const r of statementAsc) {
       const t = r.tx;
       if (!t || r.info || (t.type !== 'sale' && t.type !== 'purchase')) continue;
       // Every Sale / Purchase bill is a line - one with only a service on it (Installation) too.
-      const items = itemListOf(t.items);
       used.add(r.key);
       const side = t.type === 'purchase' ? 'v' : 'c';
       const g = groupFor(`${side}|bill|${r.key}`, [t.type === 'purchase' ? 'Purchase' : 'Sale', t.bill_no?.trim()].filter(Boolean).join(' '));
       g.bill = t;
       g.billed += r.amount;
       add(g, r, { billed: r.amount });
-      for (const i of items) billOfItem.set(`${side}|${key(i)}`, g);
-      // A payment can also name the bill by its number ("E-142").
-      if (t.bill_no?.trim()) billOfItem.set(`${side}|${key(t.bill_no)}`, g);
     }
-    // Then the money, by the vehicle its remark names.
+    // Then the money: every payment is a line of its own ("Received · E-142"), next to the bill it pays.
     for (const r of statementAsc) {
       if (used.has(r.key) || r.info) continue;
       const e = r.vendor ?? r.ledger;
       if (!e) continue;
       const side = r.vendor ? 'v' : 'c';
-      const named = e.note ? billOfItem.get(`${side}|${key(e.note.split(' · ')[0])}`) : undefined;
-      const g = named ?? groupFor(`row|${r.key}`, [r.label, r.detail].filter(Boolean).join(' · '));
+      const g = groupFor(`${side}|row|${r.key}`, [r.label, r.detail].filter(Boolean).join(' · '));
       const amount = Number(e.amount);
       // Owed to a vendor without a bill (a daily wage ...); money paid back to a customer.
       const part: Partial<VehiclePart> = r.vendor
@@ -1645,6 +1638,20 @@ function VehicleTable({
     const n = net(g);
     return g.side === 'vendor' ? Math.max(0, -n) : Math.max(0, n);
   };
+  // The balance after each line, as a statement runs: oldest first, each line adding what it is owed (a bill)
+  // or taking off what was paid (a receipt) - the lines are shown newest first.
+  const runningBalance = useMemo(() => {
+    const latest = (g: VehicleGroup) => g.rows.reduce((a, r) => (r.createdAt > a ? r.createdAt : a), '');
+    const oldestFirst = [...groups].sort((a, b) => a.lastDay.localeCompare(b.lastDay) || latest(a).localeCompare(latest(b)));
+    const map = new Map<string, number>();
+    let total = 0;
+    for (const g of oldestFirst) {
+      total = round2(total + receivable(g) - payable(g));
+      map.set(g.key, total);
+    }
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups]);
   const fig = (v: number, color: string, bold = true) =>
     v ? (
       <Text className={`text-[12.5px] ${bold ? 'font-bold' : 'font-medium'}`} style={{ color }} numberOfLines={1}>
@@ -1681,7 +1688,7 @@ function VehicleTable({
           label: 'Balance',
           width: 120,
           align: 'right',
-          render: (g) => <PartyBalance position={partyPosition({ receivable: receivable(g), payable: payable(g) })} compact />,
+          render: (g) => <PartyBalance position={partyPosition({ receivable: runningBalance.get(g.key) ?? 0, payable: 0 })} compact />,
         },
       ]
     : [
