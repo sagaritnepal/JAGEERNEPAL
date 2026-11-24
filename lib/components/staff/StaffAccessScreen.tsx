@@ -177,7 +177,7 @@ export function StaffAccessScreen() {
                   {s.member_name}
                 </Text>
                 <Text className="text-[12px] text-gray-500" numberOfLines={1}>
-                  {[s.member_phone, s.status === 'paused' ? 'Paused' : null].filter(Boolean).join(' · ')}
+                  {[s.member_phone, !s.member_id ? 'No app account' : null, s.status === 'paused' ? 'Paused' : null].filter(Boolean).join(' · ')}
                 </Text>
               </View>
               <View className="rounded-full px-2.5 py-1" style={{ backgroundColor: role.bg }}>
@@ -205,7 +205,11 @@ export function StaffAccessScreen() {
             <View style={{ flexShrink: 1 }}>
               <Text className="text-[18px] font-extrabold text-gray-900">{selected.member_name}</Text>
               <Text className="text-[13px] text-gray-500">
-                {selected.member_phone ? `${selected.member_phone} · signs in with this number` : 'Signs in with their own account'}
+                {!selected.member_id
+                  ? `${selected.member_phone ? `${selected.member_phone} · ` : ''}no app account, so they cannot sign in yet`
+                  : selected.member_phone
+                    ? `${selected.member_phone} · signs in with this number`
+                    : 'Signs in with their own account'}
                 {selected.status === 'paused' ? ' · access paused' : ''}
               </Text>
             </View>
@@ -370,7 +374,7 @@ export function StaffAccessScreen() {
 
       <View className="rounded-xl border px-4 py-3" style={{ borderColor: '#BFDBFE', backgroundColor: '#EFF6FF' }}>
         <Text className="text-[12.5px]" style={{ color: '#1E40AF' }}>
-          Roles and access are saved here now. Staff will be able to sign in and open the sections you allow in the next update.
+          Everyone you employ is listed here - your app technicians and the people you keep by hand. Roles and access are saved now; staff will be able to sign in and open the sections you allow in the next update.
         </Text>
       </View>
 
@@ -389,7 +393,7 @@ export function StaffAccessScreen() {
       {adding && userId && (
         <AddStaffPopup
           ownerId={userId}
-          existing={new Set((staff ?? []).map((s) => s.member_id))}
+          existing={new Set((staff ?? []).map((s) => s.member_id).filter((id): id is string => !!id))}
           onClose={() => setAdding(false)}
           onAdded={(id) => {
             setAdding(false);

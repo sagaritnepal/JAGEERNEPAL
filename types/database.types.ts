@@ -298,7 +298,10 @@ export interface Customer {
 export interface StaffAccess {
   id: string;
   owner_id: string;
-  member_id: string;
+  /** Their Jageer account; null for a manual employee with none (0123). */
+  member_id: string | null;
+  /** The manual employee record behind this row, when it is one (0123). */
+  manual_employee_id: string | null;
   member_name: string;
   member_phone: string | null;
   work_role: 'manager' | 'accountant' | 'sales' | 'technician' | 'supervisor';
