@@ -36,6 +36,7 @@ import { nameCaps, capWords } from '../../utils/nameCaps';
 import { deleteErrorMessage } from '../../utils/dbErrors';
 import { nextEntryNo } from '../../utils/nextEntryNo';
 import { useEntryNo } from '../../hooks/useEntryNo';
+import { usePhoneContacts } from '../../hooks/usePhoneContacts';
 import { isValidPhone10 } from '../../utils/phone';
 import { findSameNameLedgers, ledgerNameKey, mergeLedgers, type SameNameLedger } from '../../utils/ledgerName';
 import { toBsHistoryLabel } from '../../utils/nepaliDate';
@@ -149,6 +150,8 @@ export function EditableDetails({ customerId, basePath, summary }: { customerId:
     queryFn: () => findSameNameLedgers(customer!.owner_id, customer!.name, customerId),
     enabled: !!customer,
   });
+  // The phone's own contacts (on a phone; a browser cannot read them), for the Contact person dropdown.
+  const phoneContacts = usePhoneContacts();
   // The registered customers, for the Name box's dropdown - read only while the edit popup is open.
   const { data: registered } = useSupabaseQuery('customers', {
     filters: customer?.owner_id ? { owner_id: customer.owner_id } : {},
@@ -167,7 +170,35 @@ export function EditableDetails({ customerId, basePath, summary }: { customerId:
     .slice(0, 40)
     .map((c) => ({ key: c.id, label: nameCaps(c.name), sub: [c.phone, c.address].filter(Boolean).join(' · ') || null }));
 
+  // Contact person: picked from the contacts - every saved ledger with its phone, and the phone's own contacts -
+  // searched by name or number; picking one fills in their phone. A name typed that is in neither stays as typed.
+  const typedContact = contactName.trim().toLowerCase();
+  const contactOptions: SuggestOption[] = (() => {
+    const seen = new Set<string>();
+    const out: (SuggestOption & { phone: string })[] = [];
+    const push = (key: string, name: string, phone: string | null | undefined, sub: string) => {
+      const n = name.trim();
+      if (!n) return;
+      const dedupe = `${n.toLowerCase()}|${(phone ?? '').replace(/\D/g, '').slice(-10)}`;
+      if (seen.has(dedupe)) return;
+      if (typedContact && !n.toLowerCase().includes(typedContact) && !(phone ?? '').includes(typedContact)) return;
+      seen.add(dedupe);
+      out.push({ key, label: nameCaps(n), sub: [phone, sub].filter(Boolean).join(' · '), phone: phone ?? '' });
+    };
+    for (const c of registered ?? []) if (c.id !== customerId) push(`c:${c.id}`, c.name, c.phone, 'Saved contact');
+    for (const p of phoneContacts.contacts) push(`p:${p.phone}`, p.name, p.phone, 'Phone contact');
+    return out
+      .sort((a, b) => Number(b.label.toLowerCase().startsWith(typedContact)) - Number(a.label.toLowerCase().startsWith(typedContact)))
+      .slice(0, 40);
+  })();
+  const contactPhoneOf = (key: string) => {
+    if (key.startsWith('c:')) return (registered ?? []).find((c) => `c:${c.id}` === key)?.phone ?? '';
+    if (key.startsWith('p:')) return key.slice(2);
+    return '';
+  };
+
   function startEditing() {
+    phoneContacts.request();
     setName(nameCaps(customer!.name));
     setPhone(customer!.phone ?? '');
     setAddress(customer!.address ?? '');
@@ -296,7 +327,13 @@ export function EditableDetails({ customerId, basePath, summary }: { customerId:
   const editPopup = editing ? (
     // Not scrollable: the Name box's dropdown and the Ledger type's own list would otherwise each sit in a
     // ScrollView inside the popup's (see PopupCard); the form is short enough to never need to scroll.
-    <PopupCard title="Edit profile" onClose={() => setEditing(false)} scrollable={false} maxWidth={760}>
+    <PopupCard
+      title="Edit profile"
+      onClose={() => setEditing(false)}
+      scrollable={false}
+      maxWidth={760}
+      footer={<FormActions onCancel={() => setEditing(false)} onSave={handleSave} saving={saving} />}
+    >
       {/* Raised, so the Name dropdown draws over the Ledger type below the row. */}
       <View style={{ zIndex: 30 }}>
         <FieldRow>
@@ -353,9 +390,24 @@ export function EditableDetails({ customerId, basePath, summary }: { customerId:
           <TextInput value={address} onChangeText={setAddress} placeholder="Address" placeholderTextColor="#9CA3AF" className={INPUT} />
         </Field>
       </FieldRow>
+      {/* Raised, so the Contact person dropdown draws over Notes and the Ledger type below. */}
+      <View style={{ zIndex: 20 }}>
       <FieldRow>
-        <Field label="Contact person" basis={220}>
-          <TextInput value={contactName} onChangeText={setContactName} placeholder="Who to talk to" placeholderTextColor="#9CA3AF" className={INPUT} />
+        <Field label="Contact person" basis={220} style={{ zIndex: 20 }}>
+          <SuggestInput
+            value={contactName}
+            onChangeText={setContactName}
+            options={contactOptions}
+            onSelectOption={(option) => {
+              setContactName(option.label);
+              const ph = contactPhoneOf(option.key);
+              if (ph) setContactPhone(ph);
+            }}
+            showWhenEmpty
+            placeholder="Search your contacts"
+            accent="#2563EB"
+            inputClassName={INPUT}
+          />
         </Field>
         <Field label="Contact person's phone" basis={180}>
           <TextInput
@@ -379,12 +431,12 @@ export function EditableDetails({ customerId, basePath, summary }: { customerId:
           />
         </Field>
       </FieldRow>
+      </View>
       <Field label="Notes" basis={600}>
         <TextInput value={notes} onChangeText={setNotes} placeholder="Anything to remember about them" placeholderTextColor="#9CA3AF" multiline className={`${INPUT} min-h-[56px]`} />
       </Field>
       <PartyTypeField ownerId={customer.owner_id} value={partyTypeId} onChange={setPartyTypeId} />
       <Text className="text-[11px] text-gray-400">* Required</Text>
-      <FormActions onCancel={() => setEditing(false)} onSave={handleSave} saving={saving} />
     </PopupCard>
   ) : null;
 
