@@ -34,6 +34,7 @@ import { localTodayIso } from '../../utils/localDate';
 import { round2, formatMoney } from '../../utils/money';
 import { itemListOf, sellsVehicles } from '../../utils/accountFeatures';
 import { ledgerNameKey } from '../../utils/ledgerName';
+import { entryDay } from '../../utils/ledgerStatement';
 import type { SuggestOption } from './SuggestInput';
 
 // Local date, not UTC - see localTodayIso.
@@ -523,7 +524,8 @@ function QuickPaymentForm() {
     setAmount(String(editing.amount));
     setNote(editing.note ?? '');
     setRows([{ ...emptyPaymentRow(), customerName: name, selectedCustomer: person, amount: String(editing.amount), note: editing.note ?? '' }]);
-    if (editing.entry_date) setDate(editing.entry_date);
+    // The entry's own day, as the ledger shows it: its entry date, else the day it was saved.
+    setDate(entryDay(editing.entry_date, editing.created_at));
     setReceiptNo(editing.receipt_no ?? '');
     setReceiptNoTouched(true);
     setBankAccountId(editing.bank_account_id ?? null);
