@@ -2030,16 +2030,6 @@ export function WorkHubPanel({
             <Text className="text-[12.5px] font-semibold text-gray-700">Detailed</Text>
           </Pressable>
         )}
-        {view === 'sheet' && (
-          <Pressable
-            onPress={() => setMaximised(true)}
-            className="h-9 flex-row items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3"
-            accessibilityLabel="Full screen"
-          >
-            <Ionicons name="expand-outline" size={15} color="#374151" />
-            <Text className="text-[12.5px] font-semibold text-gray-700">Full screen</Text>
-          </Pressable>
-        )}
 
         <Pressable
           onPress={() => router.push(newJobHref() as any)}
@@ -2120,10 +2110,6 @@ export function WorkHubPanel({
         dense
         emptyText={STAGE_COPY[stage].empty}
       />
-      <Text className="px-1 text-[11.5px] leading-[17px] text-gray-400">
-        {STAGE_COPY[stage].note} PDF and Excel save the last 30 days in full ({monthRows.length} job
-        {monthRows.length === 1 ? '' : 's'}).
-      </Text>
 
       {/* Full screen: the same list with nothing clipped, for long job
           names that the column can only show the start of. */}
@@ -2168,17 +2154,6 @@ export function WorkHubPanel({
           </ScrollView>
         </View>
       </Modal>
-
-      <Pressable
-        onPress={openBoard}
-        className="flex-row items-center justify-center gap-2 rounded-2xl border border-gray-300 bg-white py-3.5"
-      >
-        <Ionicons name="grid-outline" size={17} color={BLUE} />
-        <Text className="text-[14px] font-semibold" style={{ color: BLUE }}>
-          View details
-        </Text>
-        <Text className="text-[12px] text-gray-500">— who is carrying what</Text>
-      </Pressable>
     </>
   );
 
