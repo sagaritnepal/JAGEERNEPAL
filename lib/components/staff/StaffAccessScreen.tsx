@@ -24,6 +24,11 @@ const hhmm = (t: string | null | undefined) => (t ? t.slice(0, 5) : '');
 const validTime = (t: string) => !t.trim() || /^([01]?\d|2[0-3]):[0-5]\d$/.test(t.trim());
 
 interface Draft {
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  pan: string;
   role: WorkRole;
   title: string;
   start: string;
@@ -32,6 +37,11 @@ interface Draft {
 }
 
 const draftOf = (s: StaffAccess): Draft => ({
+  name: s.member_name ?? '',
+  phone: s.member_phone ?? '',
+  email: s.member_email ?? '',
+  address: s.member_address ?? '',
+  pan: s.member_pan ?? '',
   role: s.work_role,
   title: s.job_title ?? '',
   start: hhmm(s.work_start_time),
@@ -93,6 +103,11 @@ export function StaffAccessScreen() {
       await update.mutateAsync({
         id: selected.id,
         values: {
+          member_name: draft.name.trim(),
+          member_phone: draft.phone.trim() || null,
+          member_email: draft.email.trim() || null,
+          member_address: draft.address.trim() || null,
+          member_pan: draft.pan.trim() || null,
           work_role: draft.role,
           job_title: draft.title.trim() || null,
           work_start_time: draft.start.trim() || null,
@@ -174,7 +189,7 @@ export function StaffAccessScreen() {
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text className="text-[14px] font-bold text-gray-900" numberOfLines={1}>
-                  {s.member_name}
+                  {s.member_name || 'Unnamed staff'}
                 </Text>
                 <Text className="text-[12px] text-gray-500" numberOfLines={1}>
                   {[s.member_phone, !s.member_id ? 'No app account' : null, s.status === 'paused' ? 'Paused' : null].filter(Boolean).join(' · ')}
@@ -203,7 +218,7 @@ export function StaffAccessScreen() {
               </Text>
             </View>
             <View style={{ flexShrink: 1 }}>
-              <Text className="text-[18px] font-extrabold text-gray-900">{selected.member_name}</Text>
+              <Text className="text-[18px] font-extrabold text-gray-900">{selected.member_name || 'Unnamed staff'}</Text>
               <Text className="text-[13px] text-gray-500">
                 {!selected.member_id
                   ? `${selected.member_phone ? `${selected.member_phone} · ` : ''}no app account, so they cannot sign in yet`
@@ -224,6 +239,33 @@ export function StaffAccessScreen() {
               </Text>
             </Pressable>
           </View>
+        </View>
+
+        {/* Their details - none required. */}
+        <View className="flex-row flex-wrap" style={{ gap: 14 }}>
+          {(
+            [
+              ['name', 'Name', 'Full name', 'default'],
+              ['phone', 'Mobile', '98XXXXXXXX', 'phone-pad'],
+              ['email', 'Email', 'name@email.com', 'email-address'],
+              ['address', 'Address', 'Address', 'default'],
+              ['pan', 'PAN no.', 'PAN no.', 'default'],
+            ] as const
+          ).map(([key, label, placeholder, keyboard]) => (
+            <View key={key} style={{ flexGrow: 1, flexBasis: 180, gap: 6 }}>
+              <Text className="text-[12px] font-semibold text-gray-600">{label}</Text>
+              <TextInput
+                value={draft[key]}
+                onChangeText={(v) => setDraft({ ...draft, [key]: v })}
+                placeholder={placeholder}
+                placeholderTextColor="#9CA3AF"
+                keyboardType={keyboard}
+                autoCapitalize={key === 'email' ? 'none' : 'words'}
+                accessibilityLabel={label}
+                className="rounded-lg border border-gray-200 px-3 py-2.5 text-[14px] text-gray-900"
+              />
+            </View>
+          ))}
         </View>
 
         {/* Work role: picking one fills the access grid from it. */}
@@ -405,8 +447,9 @@ export function StaffAccessScreen() {
   );
 }
 
-/** Add someone as staff: one of your team (technicians who already work for you), or any account found by
- * its phone number. They start as the role picked here, with that role's access. */
+/** Add someone as staff: their details (name, mobile, email, address, PAN no. - none required) and the role they
+ * start with. A mobile number that has a Jageer account links that account, so they can be given access later;
+ * without one they are kept as a record. Or pick one of your team (technicians who already work for you). */
 function AddStaffPopup({
   ownerId,
   existing,
@@ -420,27 +463,44 @@ function AddStaffPopup({
 }) {
   const { data: employees } = useMyEmployees(ownerId);
   const insert = useSupabaseInsert('staff_access');
-  const [phone, setPhone] = useState('');
   const [role, setRole] = useState<WorkRole>('sales');
+  const [form, setForm] = useState({ name: '', phone: '', email: '', address: '', pan: '' });
   const [busy, setBusy] = useState(false);
 
-  async function add(person: { id: string; name: string; phone: string | null }, asRole: WorkRole) {
-    if (existing.has(person.id)) {
-      showAlert('Already on your staff', `${person.name} is already in the list.`);
-      return;
-    }
+  async function create(values: Partial<StaffAccess>) {
+    const created = await insert.mutateAsync({
+      owner_id: ownerId,
+      work_role: role,
+      access: roleOf(role).preset,
+      status: 'active',
+      ...values,
+    });
+    onAdded((created as StaffAccess).id);
+  }
+
+  async function addFromForm() {
+    if (busy) return;
     setBusy(true);
     try {
-      const created = await insert.mutateAsync({
-        owner_id: ownerId,
-        member_id: person.id,
-        member_name: person.name,
-        member_phone: person.phone,
-        work_role: asRole,
-        access: roleOf(asRole).preset,
-        status: 'active',
+      const phone = form.phone.replace(/\D/g, '');
+      // A mobile that has a Jageer account: theirs, so access can be given to it.
+      let account: { id: string; full_name: string | null } | undefined;
+      if (isValidPhone10(phone)) {
+        const { data, error } = await (supabase as any).rpc('find_account_by_phone', { p_phone: phone });
+        if (!error) account = (data ?? [])[0];
+      }
+      if (account && existing.has(account.id)) {
+        showAlert('Already on your staff', 'This mobile number is already in the list.');
+        return;
+      }
+      await create({
+        member_id: account?.id ?? null,
+        member_name: form.name.trim() || account?.full_name?.trim() || '',
+        member_phone: phone || null,
+        member_email: form.email.trim() || null,
+        member_address: form.address.trim() || null,
+        member_pan: form.pan.trim() || null,
       });
-      onAdded((created as StaffAccess).id);
     } catch (err) {
       showAlert('Could not add', getErrorMessage(err));
     } finally {
@@ -448,25 +508,13 @@ function AddStaffPopup({
     }
   }
 
-  async function findByPhone() {
-    const p = phone.replace(/\D/g, '');
-    if (!isValidPhone10(p)) {
-      showAlert('Check the number', 'Enter their 10-digit mobile number.');
-      return;
-    }
+  async function addFromTeam(p: { id: string; name: string; phone: string | null }) {
+    if (busy) return;
     setBusy(true);
     try {
-      const { data, error } = await (supabase as any).rpc('find_account_by_phone', { p_phone: p });
-      if (error) throw error;
-      const found = (data ?? [])[0] as { id: string; full_name: string | null; phone: string | null } | undefined;
-      if (!found) {
-        showAlert('No account with this number', 'Ask them to sign up in the Jageer app with this number first, then add them here.');
-        return;
-      }
-      setBusy(false);
-      await add({ id: found.id, name: found.full_name?.trim() || p, phone: found.phone }, role);
+      await create({ member_id: p.id, member_name: p.name, member_phone: p.phone });
     } catch (err) {
-      showAlert('Could not look it up', getErrorMessage(err));
+      showAlert('Could not add', getErrorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -476,8 +524,38 @@ function AddStaffPopup({
     .map((e) => ({ id: e.profile.id, name: (e.profile.full_name ?? '').trim(), phone: e.profile.phone ?? null }))
     .filter((p) => p.id && p.name && !existing.has(p.id));
 
+  const field = (key: keyof typeof form, label: string, placeholder: string, keyboard: 'default' | 'phone-pad' | 'email-address' = 'default') => (
+    <View style={{ flexGrow: 1, flexBasis: 200, gap: 6 }}>
+      <Text className="text-[12px] font-semibold text-gray-600">{label}</Text>
+      <TextInput
+        value={form[key]}
+        onChangeText={(v) => setForm({ ...form, [key]: v })}
+        placeholder={placeholder}
+        placeholderTextColor="#9CA3AF"
+        keyboardType={keyboard}
+        autoCapitalize={key === 'email' ? 'none' : 'words'}
+        accessibilityLabel={label}
+        className="rounded-lg border border-gray-200 px-3 py-2.5 text-[14px] text-gray-900"
+      />
+    </View>
+  );
+
   return (
-    <PopupCard title="Add staff" onClose={onClose} maxWidth={520}>
+    <PopupCard
+      title="Add staff"
+      onClose={onClose}
+      maxWidth={620}
+      footer={
+        <View className="flex-row justify-end" style={{ gap: 10 }}>
+          <Pressable onPress={onClose} className="rounded-lg border border-gray-200 bg-white px-4 py-3">
+            <Text className="text-[14px] font-semibold text-gray-800">Cancel</Text>
+          </Pressable>
+          <Pressable onPress={addFromForm} disabled={busy} className="rounded-lg px-5 py-3" style={{ backgroundColor: BLUE, opacity: busy ? 0.6 : 1 }}>
+            <Text className="text-[14px] font-bold text-white">{busy ? 'Adding…' : 'Add staff'}</Text>
+          </Pressable>
+        </View>
+      }
+    >
       <View style={{ gap: 16 }}>
         <View style={{ gap: 6 }}>
           <Text className="text-[12px] font-semibold text-gray-600">Role to start with</Text>
@@ -502,23 +580,16 @@ function AddStaffPopup({
           </View>
         </View>
 
-        <View style={{ gap: 6 }}>
-          <Text className="text-[12px] font-semibold text-gray-600">Their mobile number (the one they sign in with)</Text>
-          <View className="flex-row" style={{ gap: 8 }}>
-            <TextInput
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-              placeholder="98XXXXXXXX"
-              placeholderTextColor="#9CA3AF"
-              accessibilityLabel="Mobile number"
-              className="flex-1 rounded-lg border border-gray-200 px-3 py-2.5 text-[14px] text-gray-900"
-            />
-            <Pressable onPress={findByPhone} disabled={busy} className="justify-center rounded-lg px-4" style={{ backgroundColor: BLUE, opacity: busy ? 0.6 : 1 }}>
-              <Text className="text-[14px] font-bold text-white">{busy ? '…' : 'Add'}</Text>
-            </Pressable>
-          </View>
+        <View className="flex-row flex-wrap" style={{ gap: 14 }}>
+          {field('name', 'Name', 'Full name')}
+          {field('phone', 'Mobile', '98XXXXXXXX', 'phone-pad')}
+          {field('email', 'Email', 'name@email.com', 'email-address')}
+          {field('pan', 'PAN no.', 'PAN no.')}
         </View>
+        {field('address', 'Address', 'Address')}
+        <Text className="text-[11.5px] text-gray-500">
+          Nothing here is required. If the mobile number has a Jageer account, it is linked so you can give them access later.
+        </Text>
 
         {team.length > 0 && (
           <View style={{ gap: 6 }}>
@@ -527,7 +598,7 @@ function AddStaffPopup({
               {team.map((p) => (
                 <Pressable
                   key={p.id}
-                  onPress={() => add(p, role)}
+                  onPress={() => addFromTeam(p)}
                   disabled={busy}
                   className="flex-row items-center border-b border-gray-100 px-3 py-2.5"
                   style={{ gap: 10 }}

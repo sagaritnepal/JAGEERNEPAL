@@ -309,6 +309,10 @@ export interface StaffAccess {
   manual_employee_id: string | null;
   member_name: string;
   member_phone: string | null;
+  /** Their details (0125): all optional. */
+  member_email?: string | null;
+  member_address?: string | null;
+  member_pan?: string | null;
   work_role: 'manager' | 'accountant' | 'sales' | 'technician' | 'supervisor';
   job_title: string | null;
   work_start_time: string | null;
