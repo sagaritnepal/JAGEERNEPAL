@@ -305,6 +305,10 @@ export interface Website {
   owner_id: string;
   domain: string;
   site_key: string;
+  /** Google links (0128): the Analytics tag, the GA4 property and the Search Console property. */
+  ga_measurement_id: string | null;
+  ga_property_id: string | null;
+  gsc_site_url: string | null;
   created_at: string;
 }
 

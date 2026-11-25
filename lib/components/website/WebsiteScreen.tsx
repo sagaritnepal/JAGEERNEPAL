@@ -15,6 +15,7 @@ import { useSupabaseDelete, useSupabaseInsert, useSupabaseQuery, useSupabaseUpda
 import { showAlert, getErrorMessage } from '../../utils/alert';
 import { toBsLabel, toBsDayChartLabel } from '../../utils/nepaliDate';
 import { LineChart } from '../finance/dashboard/LineChart';
+import { GoogleSection } from './GoogleSection';
 import type { Website, WebsiteLead } from '../../../types/database.types';
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -616,6 +617,9 @@ export function WebsiteScreen() {
           )}
         </Panel>
       </View>
+
+      {/* Google: Search Console and Analytics. */}
+      <GoogleSection site={site} days={days} wide={wide} />
 
       {/* Leads section. */}
       <View className="flex-row items-center" style={{ gap: 12 }}>
