@@ -152,3 +152,6 @@ as $$
 $$;
 
 grant execute on function website_stats(uuid, int) to authenticated;
+
+-- Let the app see the new tables straight away.
+notify pgrst, 'reload schema';
