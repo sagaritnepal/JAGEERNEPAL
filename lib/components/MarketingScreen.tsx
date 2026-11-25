@@ -6,6 +6,8 @@
 // anonymous profile_visits log - see migration 0110 and useLogProfileVisit).
 import { useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { useAuthStore } from '../hooks/useAuth';
 import { useSupabaseQuery } from '../hooks/useSupabase';
 import { STATUS_STYLES } from '../constants/requestStatus';
@@ -57,6 +59,7 @@ function StatPill({ label, value, color }: { label: string; value: number | stri
 export function MarketingScreen() {
   const userId = useAuthStore((state) => state.session?.user.id);
   const [view, setView] = useState<View_>('leads');
+  const router = useRouter();
 
   const { data: requests = [], isLoading: loadingRequests } = useSupabaseQuery('service_requests', {
     filters: userId ? { reseller_id: userId } : {},
@@ -107,6 +110,20 @@ export function MarketingScreen() {
   return (
     <ScrollView className="flex-1 bg-gray-50" contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
       <Segmented value={view} onChange={setView} />
+
+      {/* The shop's own website (e.g. mansa.com.np): its visitors and enquiries live on the Website page. */}
+      <Pressable
+        onPress={() => router.push('/(reseller)/website' as any)}
+        className="mb-4 flex-row items-center rounded-2xl border border-blue-100 bg-white px-4 py-3"
+        style={{ gap: 10 }}
+      >
+        <Ionicons name="globe-outline" size={20} color="#2563EB" />
+        <View className="flex-1">
+          <Text className="text-[14px] font-bold text-gray-900">Your website</Text>
+          <Text className="text-[12px] text-gray-500">Visitors and enquiries from your own website</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+      </Pressable>
 
       {view === 'leads' ? (
         <>

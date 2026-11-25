@@ -59,6 +59,7 @@ const NAV_ITEMS: WebNavItem[] = [
   { href: '/(reseller)/requests', label: 'Requests', icon: 'clipboard' },
   { href: '/(reseller)/inventory', label: 'Inventory', icon: 'cube' },
   { href: '/(reseller)/marketing', label: 'Marketing', icon: 'megaphone' },
+  { href: '/(reseller)/website', label: 'Website', icon: 'globe' },
   {
     href: '/(reseller)/finance',
     label: 'Finance',
@@ -86,6 +87,7 @@ const MAIN_WIDE_ROUTES = [
   '/shop',
   '/requests',
   '/marketing',
+  '/website',
   '/wholesale',
   '/quotation',
   '/profile',
@@ -249,6 +251,7 @@ export default function ResellerLayout() {
         <Tabs.Screen name="report" options={{ href: null, title: 'Report' }} />
         <Tabs.Screen name="balance-sheet" options={{ href: null, title: 'Balance Sheet' }} />
         <Tabs.Screen name="staff" options={{ href: null, title: 'Staff & Access' }} />
+        <Tabs.Screen name="website" options={{ href: null, title: 'Website' }} />
         <Tabs.Screen name="daybook" options={{ href: null, title: 'Day Book' }} />
       </Tabs>
   );

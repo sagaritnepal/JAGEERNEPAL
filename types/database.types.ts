@@ -299,6 +299,29 @@ export interface Customer {
   updated_at: string;
 }
 
+/** A reseller's own website that reports its visits and leads to Jageer (0127_website_visits_and_leads.sql). */
+export interface Website {
+  id: string;
+  owner_id: string;
+  domain: string;
+  site_key: string;
+  created_at: string;
+}
+
+/** A form sent from the reseller's website (contact, enquiry...). */
+export interface WebsiteLead {
+  id: string;
+  website_id: string;
+  name: string | null;
+  phone: string | null;
+  email: string | null;
+  message: string | null;
+  page: string | null;
+  fields: Record<string, string>;
+  status: 'new' | 'contacted';
+  created_at: string;
+}
+
 /** One staff member of a shop and what they may open in its portal (0122_staff_access.sql). */
 export interface StaffAccess {
   id: string;
@@ -730,6 +753,8 @@ export interface Database {
         Relationships: [];
       };
       staff_access: { Row: StaffAccess; Insert: Partial<StaffAccess>; Update: Partial<StaffAccess>; Relationships: [] };
+      websites: { Row: Website; Insert: Partial<Website>; Update: Partial<Website>; Relationships: [] };
+      website_leads: { Row: WebsiteLead; Insert: Partial<WebsiteLead>; Update: Partial<WebsiteLead>; Relationships: [] };
       technician_employment: {
         Row: TechnicianEmployment;
         Insert: Partial<TechnicianEmployment>;
