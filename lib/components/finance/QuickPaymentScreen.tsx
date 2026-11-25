@@ -549,19 +549,6 @@ function QuickPaymentForm() {
     if (router.canGoBack()) router.back();
   }
 
-  // Shown on top of the form while an entry is being changed.
-  const editBanner = editing ? (
-    <View className="mb-4 flex-row flex-wrap items-center justify-between rounded-xl border px-4 py-3" style={{ borderColor: '#FCD34D', backgroundColor: '#FFFBEB', gap: 8 }}>
-      <Text className="text-[13px] font-semibold" style={{ color: '#92400E' }}>
-        {`Editing ${isOut ? 'payment' : 'receipt'}${editing.receipt_no ? ` no. ${editing.receipt_no}` : ''} - Save updates it, nothing new is added.`}
-      </Text>
-      <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace(`/(reseller)/quick-payment?type=${isOut ? 'out' : 'in'}` as never))} hitSlop={6}>
-        <Text className="text-[13px] font-bold" style={{ color: '#92400E' }}>
-          Cancel edit
-        </Text>
-      </Pressable>
-    </View>
-  ) : null;
 
   async function handleSaveAll() {
     if (!userId) return;
@@ -810,7 +797,6 @@ function QuickPaymentForm() {
     return (
       <ScrollView className="flex-1 bg-gray-50" contentContainerStyle={{ paddingBottom: 60 }} keyboardShouldPersistTaps="handled">
         <View className="px-8 pt-6">
-          {editBanner}
           <View className="flex-row" style={{ gap: 24 }}>
             <View className="flex-1" style={{ minWidth: 0, maxWidth: 1500 }}>
               {/* Date/Receipt No. and Payment method apply to every row in
@@ -1009,7 +995,6 @@ function QuickPaymentForm() {
       extraScrollHeight={20}
       keyboardShouldPersistTaps="handled"
     >
-      {editBanner}
       <View className={`mb-3 flex-row items-center gap-2 rounded-2xl p-4 ${meta.bg}`}>
         <Ionicons name={meta.icon} size={20} color={meta.color} />
         <Text className="text-base font-bold" style={{ color: meta.color }}>
