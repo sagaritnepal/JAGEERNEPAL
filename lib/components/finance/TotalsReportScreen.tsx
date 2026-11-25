@@ -890,27 +890,64 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
     // Every report prints as it shows: the Purchase Report's table - SN, date, bill no., who, the vehicle, their
     // ledger type, amount.
     const billLog = true;
-    const billColumnsPrint = [
-      { label: 'SN' },
-      { label: 'Date' },
-      { label: 'Bill No.' },
-      { label: pickWord.one },
-      ...(showItem ? [{ label: 'Item' }] : []),
-      ...(showModel ? [{ label: 'Model' }] : []),
-      { label: 'Ledger type' },
-      { label: 'Amount (NPR)', align: 'right' as const },
+    // Sales / Purchase print as they show: SN, date, bill no., ledger type, who, (item, model,) remark, amount.
+    const bills = kind === 'sale' || kind === 'purchase';
+    const billColumnsPrint = bills
+      ? [
+          { label: 'SN' },
+          { label: 'Date' },
+          { label: 'Bill No.' },
+          { label: 'Ledger type' },
+          { label: pickWord.one },
+          ...(showItem ? [{ label: 'Item' }] : []),
+          ...(showModel ? [{ label: 'Model' }] : []),
+          { label: 'Remark' },
+          { label: 'Amount (NPR)', align: 'right' as const },
+        ]
+      : [
+          { label: 'SN' },
+          { label: 'Date' },
+          { label: 'Bill No.' },
+          { label: pickWord.one },
+          ...(showItem ? [{ label: 'Item' }] : []),
+          ...(showModel ? [{ label: 'Model' }] : []),
+          { label: 'Ledger type' },
+          { label: 'Amount (NPR)', align: 'right' as const },
+        ];
+    const billRowPrint = (e: Entry, i: number) =>
+      bills
+        ? [
+            String(i + 1),
+            dateOf(e),
+            e.billNo || '-',
+            e.ledgerType || '-',
+            e.category || e.party || '-',
+            ...(showItem ? [e.itemNames || '-'] : []),
+            ...(showModel ? [e.modelNames || '-'] : []),
+            e.remark || '-',
+            money(e.amount),
+          ]
+        : [
+            String(i + 1),
+            dateOf(e),
+            e.billNo || '-',
+            e.category || e.party || '-',
+            ...(showItem ? [e.itemNames || '-'] : []),
+            ...(showModel ? [e.modelNames || '-'] : []),
+            e.ledgerType || '-',
+            money(e.amount),
+          ];
+    const billFooter = (total: number) => [
+      '',
+      '',
+      '',
+      '',
+      ...(bills ? [''] : []),
+      ...(showItem ? [''] : []),
+      ...(showModel ? [''] : []),
+      'Total',
+      money(total),
     ];
-    const billRowPrint = (e: Entry, i: number) => [
-      String(i + 1),
-      dateOf(e),
-      e.billNo || '-',
-      e.category || e.party || '-',
-      ...(showItem ? [e.itemNames || '-'] : []),
-      ...(showModel ? [e.modelNames || '-'] : []),
-      e.ledgerType || '-',
-      money(e.amount),
-    ];
-    const billFooter = (total: number) => ['', '', '', '', ...(showItem ? [''] : []), ...(showModel ? [''] : []), 'Total', money(total)];
     const logSection = (heading: string, rows: Entry[], total: number): PrintSection =>
       billLog
         ? { heading, columns: billColumnsPrint, rows: rows.map(billRowPrint), footer: billFooter(total) }
