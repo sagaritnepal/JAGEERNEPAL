@@ -120,6 +120,16 @@ function HeaderButton({ icon, label, danger, onPress }: { icon: keyof typeof Ion
   );
 }
 
+/** The fields whose typed value differs from what is saved ('' = none), each as its trimmed value or null. */
+function changedOnly(fields: Record<string, [string, string | null | undefined]>): Record<string, string | null> {
+  const out: Record<string, string | null> = {};
+  for (const [key, [typed, saved]] of Object.entries(fields)) {
+    const next = typed.trim() || null;
+    if (next !== ((saved ?? '').trim() || null)) out[key] = next;
+  }
+  return out;
+}
+
 /** The person's name card: name, phone, address, a summary figure, and Edit / Delete.
  * Also shown on top of a person's own Sales / Purchase / Expense report. */
 export function EditableDetails({ customerId, basePath, summary }: { customerId: string; basePath: string; summary?: ReactNode }) {
@@ -224,12 +234,15 @@ export function EditableDetails({ customerId, basePath, summary }: { customerId:
         name: nameCaps(name.trim()),
         phone: trimmedPhone || null,
         address: address.trim() || null,
-        vat_pan_no: vatPan.trim() || null,
-        contact_person_name: contactName.trim() || null,
-        contact_person_phone: contactPhone.trim() || null,
-        landline: landline.trim() || null,
-        email: email.trim() || null,
-        notes: notes.trim() || null,
+        // The profile's own fields (0124) only when changed - all optional; only the name is required.
+        ...changedOnly({
+          vat_pan_no: [vatPan, customer!.vat_pan_no],
+          contact_person_name: [contactName, customer!.contact_person_name],
+          contact_person_phone: [contactPhone, customer!.contact_person_phone],
+          landline: [landline, customer!.landline],
+          email: [email, customer!.email],
+          notes: [notes, customer!.notes],
+        }),
         // Only when changed, so saving a party never depends on the type column.
         ...(partyTypeId !== (customer!.party_type_id ?? null) ? { party_type_id: partyTypeId } : {}),
       },
