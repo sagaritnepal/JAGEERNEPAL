@@ -290,6 +290,11 @@ export interface Customer {
   phone_contact_id: string | null;
   /** What kind of party this is (see party_types); null = not set. */
   party_type_id: string | null;
+  /** Their profile (0124_customer_profile.sql). */
+  vat_pan_no?: string | null;
+  landline?: string | null;
+  email?: string | null;
+  notes?: string | null;
   created_at: string;
   updated_at: string;
 }

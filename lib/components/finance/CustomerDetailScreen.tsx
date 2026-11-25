@@ -130,6 +130,13 @@ export function EditableDetails({ customerId, basePath, summary }: { customerId:
   const nameInput = useRef<TextInput | null>(null);
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
+  // The rest of their profile: VAT / PAN no., contact person, landline, email, notes.
+  const [vatPan, setVatPan] = useState('');
+  const [contactName, setContactName] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [landline, setLandline] = useState('');
+  const [email, setEmail] = useState('');
+  const [notes, setNotes] = useState('');
   const [partyTypeId, setPartyTypeId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [merging, setMerging] = useState(false);
@@ -164,6 +171,12 @@ export function EditableDetails({ customerId, basePath, summary }: { customerId:
     setName(nameCaps(customer!.name));
     setPhone(customer!.phone ?? '');
     setAddress(customer!.address ?? '');
+    setVatPan(customer!.vat_pan_no ?? '');
+    setContactName(customer!.contact_person_name ?? '');
+    setContactPhone(customer!.contact_person_phone ?? '');
+    setLandline(customer!.landline ?? '');
+    setEmail(customer!.email ?? '');
+    setNotes(customer!.notes ?? '');
     setPartyTypeId(customer!.party_type_id ?? null);
     setEditing(true);
   }
@@ -180,6 +193,12 @@ export function EditableDetails({ customerId, basePath, summary }: { customerId:
         name: nameCaps(name.trim()),
         phone: trimmedPhone || null,
         address: address.trim() || null,
+        vat_pan_no: vatPan.trim() || null,
+        contact_person_name: contactName.trim() || null,
+        contact_person_phone: contactPhone.trim() || null,
+        landline: landline.trim() || null,
+        email: email.trim() || null,
+        notes: notes.trim() || null,
         // Only when changed, so saving a party never depends on the type column.
         ...(partyTypeId !== (customer!.party_type_id ?? null) ? { party_type_id: partyTypeId } : {}),
       },
@@ -233,6 +252,10 @@ export function EditableDetails({ customerId, basePath, summary }: { customerId:
       showAlert('Check the phone number', 'Enter a valid 10-digit phone number.');
       return;
     }
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      showAlert('Check the email', 'Enter an email like name@company.com, or leave it empty.');
+      return;
+    }
     setSaving(true);
     try {
       // One ledger per name: a name another ledger already has is not saved - the two are merged instead, if
@@ -273,11 +296,11 @@ export function EditableDetails({ customerId, basePath, summary }: { customerId:
   const editPopup = editing ? (
     // Not scrollable: the Name box's dropdown and the Ledger type's own list would otherwise each sit in a
     // ScrollView inside the popup's (see PopupCard); the form is short enough to never need to scroll.
-    <PopupCard title="Edit customer" onClose={() => setEditing(false)} scrollable={false}>
+    <PopupCard title="Edit profile" onClose={() => setEditing(false)} scrollable={false} maxWidth={760}>
       {/* Raised, so the Name dropdown draws over the Ledger type below the row. */}
       <View style={{ zIndex: 30 }}>
         <FieldRow>
-          <Field label="Name *" basis={240} style={{ zIndex: 30 }}>
+          <Field label="Company / name *" basis={240} style={{ zIndex: 30 }}>
             <SuggestInput
               value={name}
               inputRef={(el) => {
@@ -299,7 +322,7 @@ export function EditableDetails({ customerId, basePath, summary }: { customerId:
               inputClassName={INPUT}
             />
           </Field>
-          <Field label="Phone (10 digits)" basis={180}>
+          <Field label="Mobile (10 digits)" basis={180}>
             <TextInput
               value={phone}
               onChangeText={(v) => setPhone(v.replace(/[^0-9]/g, ''))}
@@ -310,17 +333,55 @@ export function EditableDetails({ customerId, basePath, summary }: { customerId:
               className={INPUT}
             />
           </Field>
-          <Field label="Address" basis={320}>
+          <Field label="Landline" basis={160}>
             <TextInput
-              value={address}
-              onChangeText={setAddress}
-              placeholder="Address"
+              value={landline}
+              onChangeText={(v) => setLandline(v.replace(/[^0-9+\- ]/g, ''))}
+              placeholder="01-XXXXXXX"
               placeholderTextColor="#9CA3AF"
+              keyboardType="phone-pad"
               className={INPUT}
             />
           </Field>
         </FieldRow>
       </View>
+      <FieldRow>
+        <Field label="VAT / PAN no." basis={180}>
+          <TextInput value={vatPan} onChangeText={setVatPan} placeholder="e.g. 601234567" placeholderTextColor="#9CA3AF" className={INPUT} />
+        </Field>
+        <Field label="Address" basis={320}>
+          <TextInput value={address} onChangeText={setAddress} placeholder="Address" placeholderTextColor="#9CA3AF" className={INPUT} />
+        </Field>
+      </FieldRow>
+      <FieldRow>
+        <Field label="Contact person" basis={220}>
+          <TextInput value={contactName} onChangeText={setContactName} placeholder="Who to talk to" placeholderTextColor="#9CA3AF" className={INPUT} />
+        </Field>
+        <Field label="Contact person's phone" basis={180}>
+          <TextInput
+            value={contactPhone}
+            onChangeText={(v) => setContactPhone(v.replace(/[^0-9+\- ]/g, ''))}
+            placeholder="98XXXXXXXX"
+            placeholderTextColor="#9CA3AF"
+            keyboardType="phone-pad"
+            className={INPUT}
+          />
+        </Field>
+        <Field label="Email" basis={220}>
+          <TextInput
+            value={email}
+            onChangeText={setEmail}
+            placeholder="name@company.com"
+            placeholderTextColor="#9CA3AF"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            className={INPUT}
+          />
+        </Field>
+      </FieldRow>
+      <Field label="Notes" basis={600}>
+        <TextInput value={notes} onChangeText={setNotes} placeholder="Anything to remember about them" placeholderTextColor="#9CA3AF" multiline className={`${INPUT} min-h-[56px]`} />
+      </Field>
       <PartyTypeField ownerId={customer.owner_id} value={partyTypeId} onChange={setPartyTypeId} />
       <Text className="text-[11px] text-gray-400">* Required</Text>
       <FormActions onCancel={() => setEditing(false)} onSave={handleSave} saving={saving} />
@@ -337,8 +398,38 @@ export function EditableDetails({ customerId, basePath, summary }: { customerId:
         <View className="flex-row flex-wrap items-center" style={{ gap: 8 }}>
           <Text className="text-[17px] font-extrabold text-gray-900">{nameCaps(customer.name)}</Text>
         </View>
-        {(!!customer.phone || !!customer.address) && (
+        {(!!customer.phone || !!customer.address || !!customer.landline || !!customer.vat_pan_no || !!customer.contact_person_name || !!customer.email) && (
           <View className="mt-0.5 flex-row flex-wrap" style={{ columnGap: 16, rowGap: 2 }}>
+            {!!customer.vat_pan_no && (
+              <View className="flex-row items-center gap-1">
+                <Ionicons name="document-text-outline" size={12} color="#6B7280" />
+                <Text className="text-[12.5px] text-gray-600">VAT/PAN {customer.vat_pan_no}</Text>
+              </View>
+            )}
+            {!!customer.landline && (
+              <Pressable onPress={() => Linking.openURL(`tel:${customer.landline}`)} className="flex-row items-center gap-1">
+                <Ionicons name="call-outline" size={12} color="#6B7280" />
+                <Text className="text-[12.5px] text-blue-700">{customer.landline}</Text>
+              </Pressable>
+            )}
+            {!!customer.contact_person_name && (
+              <Pressable
+                onPress={() => (customer.contact_person_phone ? Linking.openURL(`tel:${customer.contact_person_phone}`) : undefined)}
+                className="flex-row items-center gap-1"
+              >
+                <Ionicons name="person-outline" size={12} color="#6B7280" />
+                <Text className="text-[12.5px] text-gray-600">
+                  {customer.contact_person_name}
+                  {customer.contact_person_phone ? <Text className="text-blue-700">{` · ${customer.contact_person_phone}`}</Text> : null}
+                </Text>
+              </Pressable>
+            )}
+            {!!customer.email && (
+              <Pressable onPress={() => Linking.openURL(`mailto:${customer.email}`)} className="flex-row items-center gap-1">
+                <Ionicons name="mail-outline" size={12} color="#6B7280" />
+                <Text className="text-[12.5px] text-blue-700">{customer.email}</Text>
+              </Pressable>
+            )}
             {!!customer.phone && (
               <Pressable onPress={() => Linking.openURL(`tel:${customer.phone}`)} className="flex-row items-center gap-1">
                 <Ionicons name="call-outline" size={12} color="#6B7280" />
@@ -359,6 +450,11 @@ export function EditableDetails({ customerId, basePath, summary }: { customerId:
               </Pressable>
             )}
           </View>
+        )}
+        {!!customer.notes && (
+          <Text className="mt-1 text-[12px] italic text-gray-500" numberOfLines={2}>
+            {customer.notes}
+          </Text>
         )}
       </View>
       {!!summary && (

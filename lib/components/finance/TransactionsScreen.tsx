@@ -1189,11 +1189,19 @@ function TransactionForm({
           }
           setCustomerId(resolvedCustomerId);
         }
+        // A new bill carries the party's VAT / PAN no. and address from their profile (0124); an edited one keeps its own.
+        const profileOf = customers.find((c) => c.id === resolvedCustomerId);
         const values = {
           type,
           amount: grandTotal,
           party_name: tidyName(savedPartyName.trim()) || null,
           customer_id: resolvedCustomerId,
+          ...(!initial && profileOf
+            ? {
+                ...(profileOf.vat_pan_no?.trim() ? { vat_pan_no: profileOf.vat_pan_no.trim() } : {}),
+                ...(profileOf.address?.trim() ? { party_address: profileOf.address.trim() } : {}),
+              }
+            : {}),
           note: note.trim() || null,
           bill_no: billNo.trim() || null,
           bill_date: billDate || null,
