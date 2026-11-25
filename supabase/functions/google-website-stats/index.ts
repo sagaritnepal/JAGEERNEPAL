@@ -1,3 +1,4 @@
+// Deployed in Supabase as 'smart-function' (the name the app calls - see GoogleSection.tsx).
 // google-website-stats: Google's figures for a reseller's own website, for Jageer's Website page.
 //   - Search Console: what people searched on Google, impressions, clicks, position, top pages.
 //   - Google Analytics 4: users, sessions, time on site, cities, countries, channels.

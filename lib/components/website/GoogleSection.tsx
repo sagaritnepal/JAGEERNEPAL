@@ -15,6 +15,8 @@ import { toBsDayChartLabel } from '../../utils/nepaliDate';
 import { LineChart } from '../finance/dashboard/LineChart';
 import type { Website } from '../../../types/database.types';
 
+// The google-website-stats code is deployed in Supabase under the name 'smart-function'.
+const GOOGLE_FN = 'smart-function';
 const CARD = 'rounded-2xl border border-gray-200 bg-white';
 const BLUE = '#2563EB';
 
@@ -184,7 +186,7 @@ export function GoogleSection({ site, days, wide }: { site: Website; days: numbe
   const { data: info } = useQuery({
     queryKey: ['google-website-stats', 'info'],
     queryFn: async () => {
-      const { data } = await supabase.functions.invoke('google-website-stats', { body: { action: 'info' } });
+      const { data } = await supabase.functions.invoke(GOOGLE_FN, { body: { action: 'info' } });
       return (data ?? {}) as { serviceAccount?: string | null };
     },
     staleTime: 60 * 60 * 1000,
@@ -194,7 +196,7 @@ export function GoogleSection({ site, days, wide }: { site: Website; days: numbe
   const { data, isLoading, error } = useQuery({
     queryKey: ['google-website-stats', site.id, site.gsc_site_url, site.ga_property_id, days],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke('google-website-stats', { body: { website_id: site.id, days } });
+      const { data, error } = await supabase.functions.invoke(GOOGLE_FN, { body: { website_id: site.id, days } });
       if (error) throw error;
       return data as Result;
     },
