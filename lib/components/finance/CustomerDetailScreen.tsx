@@ -1331,10 +1331,28 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
     (row.vendor ?? row.ledger)?.source_type === 'rental_wage'
       ? 'This daily rent comes from a rental. Change the rental (who it is rented to, its rate or Returned on) or remove it on the Rent & EMI page, and these lines follow.'
       : 'This entry was written by another record (a job or a booking). Change that record and this follows.';
+  // A line a job (or another record) wrote: say where it comes from, and open that job to change or delete it there.
+  function explainLocked(row: HistoryRow) {
+    const e = row.vendor ?? row.ledger;
+    const jobId = e?.source_type?.startsWith('service_request') ? e.source_id : null;
+    if (!jobId) {
+      showAlert('Changed elsewhere', lockedReason(row));
+      return;
+    }
+    showAlert(
+      'This comes from a job',
+      `${e?.entry_type === 'credit' ? 'This payment was recorded on a job' : 'This amount was put here when a job was completed'}. Open the job to change it, mark it unpaid or delete the job - the ledger follows.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Open the job', onPress: () => router.push(`${basePath}/request/${jobId}` as never) },
+      ]
+    );
+  }
+
   function editAnyRow(row: HistoryRow) {
     if (row.tx) router.push(`${basePath}/transactions?type=${row.tx.type}&add=1&edit=${row.tx.id}` as never);
     else if (row.manual) openRow(row);
-    else showAlert('Changed elsewhere', lockedReason(row));
+    else explainLocked(row);
   }
   function deleteAnyRow(row: HistoryRow) {
     const tx = row.tx;
@@ -1358,7 +1376,7 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
         ]
       );
     } else if (row.manual) removeRow(row);
-    else showAlert('Changed elsewhere', lockedReason(row));
+    else explainLocked(row);
   }
 
   function removeRow(row: HistoryRow) {
