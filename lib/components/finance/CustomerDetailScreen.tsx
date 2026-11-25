@@ -433,7 +433,7 @@ export function EditableDetails({ customerId, basePath, summary }: { customerId:
       </FieldRow>
       </View>
       <Field label="Notes" basis={600}>
-        <TextInput value={notes} onChangeText={setNotes} placeholder="Anything to remember about them" placeholderTextColor="#9CA3AF" multiline className={`${INPUT} min-h-[56px]`} />
+        <TextInput value={notes} onChangeText={setNotes} placeholder="Anything to remember about them" placeholderTextColor="#9CA3AF" className={INPUT} />
       </Field>
       <PartyTypeField ownerId={customer.owner_id} value={partyTypeId} onChange={setPartyTypeId} />
       <Text className="text-[11px] text-gray-400">* Required</Text>

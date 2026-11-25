@@ -205,7 +205,8 @@ export function PopupCard({
                 {children}
               </ScrollView>
             ) : (
-              <View style={{ padding: 20, gap: 14 }}>{children}</View>
+              // Gives way (rather than pushing the footer out of the card) when the window is too short for it all.
+              <View style={{ padding: 20, gap: 14, flexShrink: 1, minHeight: 0 }}>{children}</View>
             )}
             {footer && <View className="border-t border-gray-100 bg-white px-5 py-4">{footer}</View>}
           </View>
