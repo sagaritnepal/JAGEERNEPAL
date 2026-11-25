@@ -820,6 +820,10 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
   const userId = useAuthStore((state) => state.session?.user.id);
   // Employees' daily rental wages up to today (see useRentalWageSync).
   useRentalWageSync(userId);
+  // How money moved on each line: the bank / wallet account it went through, else Cash.
+  const ledgerAccounts = useBankAccounts(userId);
+  const accountName = (accountId: string | null | undefined) =>
+    accountId ? ledgerAccounts.accounts.find((a) => a.id === accountId)?.name ?? 'Bank' : 'Cash';
   // `all` on both ledger reads: the balance is a sum over every entry.
   const { data: entries } = useSupabaseQuery('customer_ledger_entries', {
     filters: { customer_id: id },
@@ -979,7 +983,12 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
         // Whoever a vehicle is rented to owes its rate for each day it is out (0020_rent_receivable_from_renter.sql).
         label: journalOf(e.note) ? 'Journal' : e.source_type === 'rental_wage' ? 'Daily rent' : syncedFromBill ? TX_TYPE_LABEL.sale : !owes ? 'Received' : outgoing ? 'Paid' : 'Receivable',
         tone: outgoing ? OUT_TONE : IN_TONE,
-        detail: journalText(e.note) ?? e.note ?? (syncedFromBill ? '' : e.source === 'booking' ? 'From a booked job' : 'Manual entry'),
+        // Money that moved by hand (received, or paid back) says how: Cash, eSewa, a bank - then its remark.
+        detail:
+          journalText(e.note) ??
+          (e.source === 'manual' && (!owes || outgoing)
+            ? [accountName(e.bank_account_id), e.note].filter(Boolean).join(' · ')
+            : e.note ?? (syncedFromBill ? '' : e.source === 'booking' ? 'From a booked job' : 'Manual entry')),
         reference: e.receipt_no ?? '',
         dateLabel: toBsHistoryLabel(day),
         day,
@@ -1021,7 +1030,11 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
                 : 'Bought on credit'
               : 'Paid',
         tone: OUT_TONE,
-        detail: journalText(e.note) ?? e.note ?? (syncedFromBill ? '' : e.source === 'booking' ? 'From a credit purchase' : 'Manual entry'),
+        detail:
+          journalText(e.note) ??
+          (e.source === 'manual' && !onCredit
+            ? [accountName(e.bank_account_id), e.note].filter(Boolean).join(' · ')
+            : e.note ?? (syncedFromBill ? '' : e.source === 'booking' ? 'From a credit purchase' : 'Manual entry')),
         reference: e.receipt_no ?? '',
         dateLabel: toBsHistoryLabel(day),
         day,
@@ -1045,7 +1058,7 @@ function CustomerDetail({ id, basePath }: { id: string; basePath: string }) {
     }
     return lines.sort(compareItems);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entries, vendorEntries, linkedTransactions, calendarMode, showItems]);
+  }, [entries, vendorEntries, linkedTransactions, calendarMode, showItems, ledgerAccounts.accounts]);
 
   // Every line with the running balance after it, oldest first - and shown newest first.
   const statementAsc = useMemo<HistoryRow[]>(() => withRunningBalance(allLines, 0), [allLines]);
