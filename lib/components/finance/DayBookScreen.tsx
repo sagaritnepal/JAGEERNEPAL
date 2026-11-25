@@ -1495,7 +1495,18 @@ export function DayBookScreen({ basePath }: { basePath: string }) {
             onOpenRow={(row) => {
               if (row.bill) setViewingTx(row.bill);
               else if (row.journal) removeJournal(row);
-              else if (row.edit) setEditing(row.edit);
+              else if (row.edit) {
+                // Money received from a customer, or paid to a vendor, by hand: opened in the Received / Paid form
+                // it was entered on. Anything else (a job's payment, money paid back, a transfer) keeps this popup.
+                const e = row.edit;
+                const inForm =
+                  !e.lockedReason &&
+                  e.values.entryType === 'credit' &&
+                  (e.table === 'customer_ledger_entries' || e.table === 'vendor_ledger_entries');
+                if (inForm) {
+                  router.push(`${basePath}/quick-payment?type=${e.table === 'vendor_ledger_entries' ? 'out' : 'in'}&edit=${e.id}` as never);
+                } else setEditing(e);
+              }
             }}
           />
 
