@@ -28,13 +28,27 @@ function hasActive(item: WebNavItem, isActive: (href: string) => boolean): boole
   return isActive(item.href) || !!item.children?.some((c) => hasActive(c, isActive));
 }
 
-function NavRow({ item, depth, isActive }: { item: WebNavItem; depth: number; isActive: (href: string) => boolean }) {
+function NavRow({
+  item,
+  depth,
+  isActive,
+  onNavigate,
+  startOpen,
+}: {
+  item: WebNavItem;
+  depth: number;
+  isActive: (href: string) => boolean;
+  /** A page was picked: the pop-out menu closes itself. */
+  onNavigate?: () => void;
+  /** This group opens with its list showing (the rail's icon for it was what was clicked). */
+  startOpen?: boolean;
+}) {
   const active = isActive(item.href);
   const top = depth === 0;
   // A group (Finance, Report) is a dropdown: open while one of its pages is showing; a click on its name
   // opens or closes it (it never leaves the page).
   const insideActive = !!item.children && hasActive(item, isActive);
-  const [openState, setOpenState] = useState<boolean | null>(null);
+  const [openState, setOpenState] = useState<boolean | null>(startOpen ? true : null);
   const open = openState ?? insideActive;
   useEffect(() => {
     if (insideActive) setOpenState(null);
@@ -49,6 +63,7 @@ function NavRow({ item, depth, isActive }: { item: WebNavItem; depth: number; is
             return;
           }
           router.push(item.href as any);
+          onNavigate?.();
         }}
         accessibilityRole="link"
         accessibilityLabel={item.label}
@@ -82,7 +97,7 @@ function NavRow({ item, depth, isActive }: { item: WebNavItem; depth: number; is
       {!!item.children && open && (
         <View style={{ marginTop: 2, marginBottom: 4, gap: 1 }}>
           {item.children.map((child) => (
-            <NavRow key={child.href} item={child} depth={depth + 1} isActive={isActive} />
+            <NavRow key={child.href} item={child} depth={depth + 1} isActive={isActive} onNavigate={onNavigate} />
           ))}
         </View>
       )}
@@ -181,6 +196,23 @@ export function WebSidebarShell({
   const searchParams = useGlobalSearchParams<Record<string, string>>();
   const profile = useAuthStore((state) => state.profile);
   const [showLogo, setShowLogo] = useState(false);
+  // The full menu pops out over the page only when asked for (the rail's menu button, its logo, or a group's
+  // icon - then that group's list shows), and closes by itself when a page is picked or outside it is clicked.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
+  const openMenu = (group: string | null = null) => {
+    setOpenGroup(group);
+    setMenuOpen(true);
+  };
+  const closeMenu = () => setMenuOpen(false);
+  useEffect(() => {
+    if (!menuOpen || typeof window === 'undefined') return undefined;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setMenuOpen(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [menuOpen]);
+  // A link in the rail is lit when it, or a page inside it, is open.
+  const lit = (item: WebNavItem): boolean => isActive(item.href) || !!item.children?.some((c) => lit(c));
 
   // Several Finance sub-links share one route with a different `type` query
   // param (Payment In/Out both go to quick-payment, Sales/Purchase/Expenses
@@ -214,17 +246,84 @@ export function WebSidebarShell({
 
   return (
     <View style={{ flex: 1, flexDirection: 'row', backgroundColor: '#F9FAFB' }}>
+      {/* The rail: always there, icons only - the page gets the rest of the width. */}
       <View
         style={{
-          width: 240,
+          width: 64,
           flexShrink: 0,
+          backgroundColor: '#fff',
+          borderRightWidth: 1,
+          borderRightColor: '#E5E7EB',
+          paddingVertical: 14,
+          alignItems: 'center',
+          gap: 4,
+        }}
+      >
+        <Pressable onPress={() => openMenu()} accessibilityRole="button" accessibilityLabel="Open the menu" style={{ marginBottom: 10 }}>
+          <Image source={require('../../../assets/jageer-logo.png')} style={{ width: 34, height: 34, borderRadius: 9 }} resizeMode="contain" />
+        </Pressable>
+        <Pressable
+          onPress={() => openMenu()}
+          accessibilityRole="button"
+          accessibilityLabel="Open the menu"
+          style={{ width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}
+        >
+          <Ionicons name="menu" size={22} color="#374151" />
+        </Pressable>
+        <ScrollView style={{ flex: 1, minHeight: 0, alignSelf: 'stretch' }} contentContainerStyle={{ alignItems: 'center', gap: 4 }} showsVerticalScrollIndicator={false}>
+          {items.map((item) => {
+            const on = lit(item);
+            return (
+              <Pressable
+                key={item.href}
+                onPress={() => (item.children ? openMenu(item.href) : router.push(item.href as never))}
+                accessibilityRole="link"
+                accessibilityLabel={item.label}
+                aria-label={item.label}
+                {...({ title: item.label } as object)}
+                style={{ width: 44, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? '#EFF6FF' : 'transparent' }}
+              >
+                <Ionicons name={on ? item.icon : (`${item.icon}-outline` as keyof typeof Ionicons.glyphMap)} size={20} color={on ? '#2563EB' : '#6B7280'} />
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        <Pressable
+          onPress={profileHref ? () => router.push(profileHref as never) : undefined}
+          disabled={!profileHref}
+          accessibilityLabel="Account and store details"
+          {...({ title: profile?.full_name ?? 'Account' } as object)}
+          style={{ width: 34, height: 34, borderRadius: 999, backgroundColor: '#2563EB', alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Text style={{ fontSize: 12, fontWeight: '800', color: '#fff' }}>{initialsOf(profile?.full_name)}</Text>
+        </Pressable>
+      </View>
+
+      {/* The full menu, popped out over the page; a click outside it closes it. */}
+      {menuOpen && (
+        <Pressable
+          onPress={closeMenu}
+          accessibilityLabel="Close the menu"
+          style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 40, backgroundColor: 'rgba(15,23,42,0.25)' }}
+        />
+      )}
+      {menuOpen && (
+      <View
+        style={{
+          position: 'absolute',
+          top: 0,
+          bottom: 0,
+          left: 0,
+          zIndex: 50,
+          width: 260,
           backgroundColor: '#fff',
           borderRightWidth: 1,
           borderRightColor: '#E5E7EB',
           paddingTop: 20,
           paddingBottom: 14,
           paddingHorizontal: 14,
-        }}
+          boxShadow: '0 10px 40px rgba(15,23,42,0.18)',
+        } as object}
       >
         {/* The brand mark: the app's own logo and name. The logo opens large in a popup; the name goes back
             to the role's first page (the Dashboard for a reseller). */}
@@ -232,11 +331,21 @@ export function WebSidebarShell({
           <Pressable onPress={() => setShowLogo(true)} accessibilityRole="button" accessibilityLabel="View the logo">
             <Image source={require('../../../assets/jageer-logo.png')} style={{ width: 34, height: 34, borderRadius: 9 }} resizeMode="contain" />
           </Pressable>
-          <Pressable onPress={() => items[0] && router.push(items[0].href as never)} accessibilityRole="link" accessibilityLabel="Go to the dashboard">
+          <Pressable
+            onPress={() => {
+              if (items[0]) router.push(items[0].href as never);
+              closeMenu();
+            }}
+            accessibilityRole="link"
+            accessibilityLabel="Go to the dashboard"
+            style={{ flex: 1 }}
+          >
             <Text style={{ fontSize: 15, fontWeight: '800', color: '#111827' }}>Jageer Nepal</Text>
           </Pressable>
+          <Pressable onPress={closeMenu} hitSlop={8} accessibilityLabel="Close the menu">
+            <Ionicons name="close" size={20} color="#6B7280" />
+          </Pressable>
         </View>
-        <LogoPopup visible={showLogo} onClose={() => setShowLogo(false)} />
 
         {/* The nav list scrolls on its own (minHeight: 0 lets a flex child
             shrink below its content), so a long open submenu like Finance's
@@ -251,12 +360,19 @@ export function WebSidebarShell({
               whichever descendant route is open - that one carries its own highlight
               instead, so the parent doesn't stay lit up while browsing a child. */}
           {items.map((item) => (
-            <NavRow key={item.href} item={item} depth={0} isActive={isActive} />
+            <NavRow key={item.href} item={item} depth={0} isActive={isActive} onNavigate={closeMenu} startOpen={openGroup === item.href} />
           ))}
         </ScrollView>
 
         <Pressable
-          onPress={profileHref ? () => router.push(profileHref as any) : undefined}
+          onPress={
+            profileHref
+              ? () => {
+                  router.push(profileHref as any);
+                  closeMenu();
+                }
+              : undefined
+          }
           disabled={!profileHref}
           accessibilityLabel="Account and store details"
           style={{
@@ -291,6 +407,8 @@ export function WebSidebarShell({
           </View>
         </Pressable>
       </View>
+      )}
+      <LogoPopup visible={showLogo} onClose={() => setShowLogo(false)} />
 
       {/* `alignItems: 'center'` here (rather than `marginHorizontal: 'auto'`
           on the capped child) made the capped child fall back to
