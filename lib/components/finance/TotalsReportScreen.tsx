@@ -1164,6 +1164,17 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
       </Pressable>
     );
   };
+  const billColumn: BookColumn<Entry> = {
+    key: 'bill',
+    label: showsBillDetail ? 'Remark' : 'Bill No.',
+    width: 200,
+    render: (e) => (
+      <Text className="text-[12.5px] font-semibold text-gray-800" numberOfLines={1}>
+        {(showsBillDetail ? e.remark : e.billNo) || '—'}
+      </Text>
+    ),
+  };
+  const ledgerColumn: BookColumn<Entry> = { key: 'ledger', label: 'Ledger type', width: 150, render: ledgerTypePill };
   const billColumns: BookColumn<Entry>[] = layout.full
     ? [
         { key: 'sn', label: 'SN', width: 56, render: (_e, i) => <Text className="text-[12.5px] text-gray-500">{i + 1}</Text> },
@@ -1183,16 +1194,8 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
               },
             ]
           : []),
-        {
-          key: 'bill',
-          label: showsBillDetail ? 'Remark' : 'Bill No.',
-          width: 200,
-          render: (e) => (
-            <Text className="text-[12.5px] font-semibold text-gray-800" numberOfLines={1}>
-              {(showsBillDetail ? e.remark : e.billNo) || '—'}
-            </Text>
-          ),
-        },
+        // Sales / Purchase: the Ledger type follows the bill no., and the remark sits before the amount.
+        ...(showsBillDetail ? [ledgerColumn] : [billColumn]),
         {
           key: 'who',
           label: pickWord.one,
@@ -1200,7 +1203,7 @@ export function TotalsReportScreen({ kind, basePath, partyId }: { kind: Kind; ba
         },
         ...(showItem ? [itemColumn] : []),
         ...(showModel ? [modelColumn] : []),
-        { key: 'ledger', label: 'Ledger type', width: 150, render: ledgerTypePill },
+        ...(showsBillDetail ? [billColumn] : [ledgerColumn]),
         { key: 'amount', label: 'Amount', width: 130, align: 'right', render: amountCell },
         {
           key: 'act',
