@@ -1,7 +1,8 @@
 // Deployed in Supabase as 'smart-function' (the name the app calls - see GoogleSection.tsx).
 // google-website-stats: Google's figures for a reseller's own website, for Jageer's Website page.
 //   - Search Console: what people searched on Google, impressions, clicks, position, top pages.
-//   - Google Analytics 4: users, sessions, time on site, cities, countries, channels.
+//   - Google Analytics 4: users, sessions, time on site, cities, countries, channels, and people on
+//     the site right now (realtime, last 30 minutes).
 //
 // One file on purpose, so it can be pasted into Supabase > Edge Functions > "Deploy a new function"
 // in the dashboard (no CLI needed). Keep "Verify JWT" ON: only a signed-in Jageer user can call it,
@@ -134,7 +135,12 @@ async function analytics(token: string, property: string, days: number) {
         count: Number(x.metricValues[0].value),
       })),
     );
-  const [totals, cities, countries, channels] = await Promise.all([
+  // People on the site in the last 30 minutes. The normal reports take a day or two to fill in,
+  // this one is live - so a new site shows something at once. Its own failure never hides the rest.
+  const live = google(token, url.replace(':runReport', ':runRealtimeReport'), { metrics: [{ name: 'activeUsers' }] })
+    .then((r) => Number(r.rows?.[0]?.metricValues?.[0]?.value ?? 0))
+    .catch(() => null);
+  const [totals, cities, countries, channels, liveUsers] = await Promise.all([
     google(token, url, {
       dateRanges,
       metrics: [{ name: 'activeUsers' }, { name: 'newUsers' }, { name: 'sessions' }, { name: 'screenPageViews' }, { name: 'averageSessionDuration' }],
@@ -142,6 +148,7 @@ async function analytics(token: string, property: string, days: number) {
     list('city', 'activeUsers'),
     list('country', 'activeUsers'),
     list('sessionDefaultChannelGroup', 'sessions'),
+    live,
   ]);
   const m = (totals.rows?.[0]?.metricValues ?? []).map((v: { value: string }) => Number(v.value));
   return {
@@ -150,6 +157,7 @@ async function analytics(token: string, property: string, days: number) {
     sessions: m[2] ?? 0,
     pageViews: m[3] ?? 0,
     avgSeconds: m[4] ?? 0,
+    liveUsers,
     cities,
     countries,
     channels,

@@ -19,11 +19,13 @@ import type { Website } from '../../../types/database.types';
 const GOOGLE_FN = 'smart-function';
 const CARD = 'rounded-2xl border border-gray-200 bg-white';
 const BLUE = '#2563EB';
+// Google's own words, emails and search terms are shown exactly as sent - not in the app's Title Case.
+const AS_IS = { textTransform: 'none' as const };
 
 type Row = { label: string; clicks: number; impressions: number; ctr: number; position: number };
 type Count = { label: string; count: number };
 type Gsc = { clicks: number; impressions: number; ctr: number; position: number; queries: Row[]; pages: Row[]; dates: Row[] };
-type Ga = { users: number; newUsers: number; sessions: number; pageViews: number; avgSeconds: number; cities: Count[]; countries: Count[]; channels: Count[] };
+type Ga = { users: number; liveUsers?: number | null; newUsers: number; sessions: number; pageViews: number; avgSeconds: number; cities: Count[]; countries: Count[]; channels: Count[] };
 type Failed = { error: string };
 type Result = { serviceAccount?: string | null; error?: string; gsc?: Gsc | Failed | null; ga?: Ga | Failed | null };
 
@@ -53,6 +55,19 @@ function Mini({ label, value, color }: { label: string; value: string; color: st
         {label}
       </Text>
       <Text className="mt-0.5 text-[20px] font-bold text-gray-900">{value}</Text>
+    </View>
+  );
+}
+
+/** Google's realtime count: people on the site in the last 30 minutes. Shows at once on a new site,
+ * while the day-by-day reports below take a day or two to fill in. */
+function Live({ count }: { count: number }) {
+  const on = count > 0;
+  return (
+    <View className="mb-3 flex-row items-center rounded-xl px-3.5 py-2.5" style={{ gap: 8, backgroundColor: on ? '#05966914' : '#F9FAFB' }}>
+      <View className="h-2 w-2 rounded-full" style={{ backgroundColor: on ? '#059669' : '#D1D5DB' }} />
+      <Text className="text-[13px] font-semibold text-gray-900">{fmt(count)}</Text>
+      <Text className="flex-1 text-[12.5px] text-gray-500">{count === 1 ? 'person' : 'people'} on the site now · last 30 minutes</Text>
     </View>
   );
 }
@@ -90,14 +105,14 @@ function Problem({ text, account, where }: { text: string; account?: string | nu
   return (
     <View className="rounded-xl bg-red-50 px-4 py-3">
       <Text className="text-[13px] font-semibold text-red-700">Google did not send the figures</Text>
-      <Text className="mt-1 text-[12.5px] text-red-700">
+      <Text className="mt-1 text-[12.5px] text-red-700" style={AS_IS}>
         {disabled
           ? `Turn on the API for ${where} in Google Cloud (APIs & Services > Library), then wait a few minutes.`
           : access && account
             ? `Add ${account} as a user in ${where}.`
             : text}
       </Text>
-      {access || disabled ? <Text className="mt-1 text-[11.5px] text-red-400">{text}</Text> : null}
+      {access || disabled ? <Text className="mt-1 text-[11.5px] text-red-400" style={AS_IS}>{text}</Text> : null}
     </View>
   );
 }
@@ -151,7 +166,7 @@ function GoogleSettings({ site, account, onDone }: { site: Website; account?: st
         {account ? (
           <Pressable onPress={copy} className="mt-1.5 flex-row items-center self-start rounded-lg border border-gray-300 bg-white px-3 py-1.5" style={{ gap: 6 }}>
             <Ionicons name="copy-outline" size={13} color="#374151" />
-            <Text className="text-[12.5px] font-semibold text-gray-800">{account}</Text>
+            <Text className="text-[12.5px] font-semibold text-gray-800" style={AS_IS}>{account}</Text>
           </Pressable>
         ) : (
           <Text className="mt-1 text-[12.5px] text-amber-700">The Google key is not set up on the server yet.</Text>
@@ -307,7 +322,7 @@ export function GoogleSection({ site, days, wide }: { site: Website; days: numbe
                   </View>
                   {gsc.queries.map((q) => (
                     <View key={q.label} className="flex-row items-center border-b border-gray-100 py-2">
-                      <Text className="flex-1 pr-2 text-[13px] text-gray-900" numberOfLines={1}>
+                      <Text className="flex-1 pr-2 text-[13px] text-gray-900" numberOfLines={1} style={AS_IS}>
                         {q.label}
                       </Text>
                       <Text className="w-[56px] text-right text-[13px] font-semibold text-blue-600">{fmt(q.clicks)}</Text>
@@ -339,6 +354,7 @@ export function GoogleSection({ site, days, wide }: { site: Website; days: numbe
             <Problem text={ga.error} account={account} where="Google Analytics" />
           ) : ga ? (
             <>
+              {ga.liveUsers != null ? <Live count={ga.liveUsers} /> : null}
               <View className="flex-row flex-wrap" style={{ gap: 10 }}>
                 <Mini label="Users" value={fmt(ga.users)} color="#2563EB" />
                 <Mini label="New users" value={fmt(ga.newUsers)} color="#059669" />
